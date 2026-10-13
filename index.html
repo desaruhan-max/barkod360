@@ -2131,13 +2131,19 @@ SAYFA.yedek = {
       indir("BARKOD360_yedek_"+bugun()+".json",JSON.stringify(y),"application/json"); V.ayar.sonYedek=new Date().toISOString(); kaydet(); this.goster(); toast("Yedek indirildi (İndirilenler klasörü)"); };
     $("#ykYukle").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return;
       try{ const y=JSON.parse(await f.text()); if(y.uygulama!=="BARKOD360"||!y.veri) throw new Error("Bu dosya BARKOD360 yedeği değil");
-        const d=y.veri; const yeni={u:0,l:0,h:0,s:0};
-        for(const k in (d.urunler||{})) if(!V.urunler[k]){ V.urunler[k]=d.urunler[k]; yeni.u++; }
+        const d=y.veri; const yeni={u:0,l:0,h:0,s:0,g:0};
+        for(const k in (d.urunler||{})){ const g=d.urunler[k], m=V.urunler[k];
+          if(!m){ V.urunler[k]=g; yeni.u++; continue; }
+          // mevcut kart: adsızsa adı al, boş alanları doldur (dolu alanlara dokunma)
+          let deg=false; if(m.tanimsiz && g.ad && !g.tanimsiz){ m.ad=g.ad; m.tanimsiz=false; deg=true; }
+          for(const a of ["marka","net","grup","birim","saklama","uretici","adres","isletme","mensei","icerik","acilis","min","gorselId"]) if((m[a]==null||m[a]==="") && g[a]!=null && g[a]!==""){ m[a]=g[a]; deg=true; }
+          if((!m.alerjen||!m.alerjen.length) && (g.alerjen||[]).length){ m.alerjen=g.alerjen; deg=true; }
+          if(deg) yeni.g++; }
         for(const k in (d.lotlar||{})) if(!V.lotlar[k]){ V.lotlar[k]=d.lotlar[k]; yeni.l++; }
         const hv=new Set(V.hareketler.map(h=>h.id)); for(const h of (d.hareketler||[])) if(!hv.has(h.id)){ V.hareketler.push(h); yeni.h++; }
         const sv=new Set(V.sayimlar.map(x=>x.id)); for(const x of (d.sayimlar||[])) if(!sv.has(x.id)){ V.sayimlar.push(x); yeni.s++; }
-        if(!yeni.u&&!yeni.l&&!yeni.h&&!yeni.s){ toast("Bu yedekteki her şey zaten kayıtlı"); return; }
-        if(!await onayla(`Yedek tarihi: ${trTarihSaat(y.tarih)}. Eklenecek: ${yeni.u} ürün kartı, ${yeni.l} parti, ${yeni.h} hareket, ${yeni.s} sayım. Mevcut kayıtlara dokunulmaz.`,"Birleştir")){ location.reload(); return; }
+        if(!yeni.u&&!yeni.g&&!yeni.l&&!yeni.h&&!yeni.s){ toast("Bu dosyadaki her şey zaten kayıtlı"); return; }
+        if(!await onayla(`Dosya tarihi: ${trTarihSaat(y.tarih)}. Eklenecek: ${yeni.u} yeni ürün kartı, ${yeni.g} ürünün eksik bilgisi tamamlanacak${yeni.l||yeni.h||yeni.s?`, ${yeni.l} parti, ${yeni.h} hareket, ${yeni.s} sayım`:""}. Dolu bilgilere dokunulmaz.`,"Yükle")){ location.reload(); return; }
         V.hareketler.sort((a,b)=>a.t.localeCompare(b.t)); for(const k in (y.foto||{})) await DB.yaz(k,y.foto[k]); await kaydetHemen(); toast("Yedek birleştirildi"); kresCiz(); urunListesiGuncelle(); sekme("konsol");
       }catch(err){ toast("Yüklenemedi: "+err.message,1); } }; },
   goster(){ $("#ykSon").textContent=V.ayar.sonYedek?"Son yedek: "+trTarihSaat(V.ayar.sonYedek):"Henüz yedek alınmadı."; }

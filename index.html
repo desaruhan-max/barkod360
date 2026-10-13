@@ -792,7 +792,7 @@ async function fotoAl(id, ent){ if(!id) return null; let d=null; try{ d=await DB
 /* ===== ÜRÜN GÖRSELİ + TAM ÜRÜN BİLGİSİ ===== */
 async function gorselKaydet(kaynak){ // canvas | Blob | File
   let c=kaynak; if(!(kaynak instanceof HTMLCanvasElement)){ const bm=await createImageBitmap(kaynak); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); }
-  return fotoKaydet(c, 520, .78);
+  return fotoKaydet(c, 1400, .82);
 }
 function urunGorsel(u){ return u ? fotoAl(u.gorselId||u.fotoId, u) : Promise.resolve(null); }
 function gorselYukle(kap){ $$("img[data-g]",kap||document).forEach(i=>{ const u=V.urunler[i.dataset.g]; urunGorsel(u).then(d=>{ if(d){ i.src=d; i.style.visibility="visible"; i.style.display=""; } }); }); }

@@ -1037,6 +1037,13 @@ const TarihMotoru = {
     const R=enR||etiketCoz("");
     const lider=Object.entries(oy).sort((a,b)=>b[1].p-a[1].p || b[1].n-a[1].n)[0];
     if(lider){ R.skt=lider[0]; R.sktTur=lider[1].tur||R.sktTur||""; R.supheli=(R.supheli||[]).filter(x=>x!=="skt"); if(lider[1].n<2 || !lider[1].tur) R.supheli.push("skt"); }
+    // Son tüketim tarihi her zaman üretim tarihinden SONRADIR: üretim olarak okunan bir tarih STT/TETT diye seçilmesin
+    const utMax=Object.keys(ut).sort().pop()||"";
+    if(R.skt && utMax && R.skt<=utMax){ const sonra=Object.entries(oy).filter(([k])=>k>utMax).sort((a,b)=>b[1].p-a[1].p||b[1].n-a[1].n)[0];
+      if(sonra){ R.skt=sonra[0]; R.sktTur=sonra[1].tur||""; R.supheli=(R.supheli||[]).filter(x=>x!=="skt"); if(sonra[1].n<2||!sonra[1].tur) R.supheli.push("skt"); }
+      else { R.skt=""; R.sktTur=""; } }
+    // anahtar kelimesiz tek tarih üretim tarihinden önce/eşitse STT değildir
+    if(R.skt && gunFark(R.skt)<-400) { R.skt=""; R.sktTur=""; }
     const u=enIyi(ut); if(u && (!R.skt || u<R.skt)) R.ut=u; const l=enIyi(lot); if(l) R.lot=l; const s2=enIyi(us); if(s2) R.us=s2;
     R.tarihler=[...(R.skt?[{iso:R.skt,tur:R.sktTur||"?"}]:[]), ...(R.ut?[{iso:R.ut,tur:"URETIM"}]:[])];
     ilerle&&ilerle(1,R.skt?"Tarih bulundu":"Tarih bulunamadı");
@@ -1856,15 +1863,16 @@ async function sySktFoto(barkod){
   yaz("⏳ Tarih okunuyor…");
   let c, fotoId=null;
   try{ const bm=await createImageBitmap(f); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); fotoId=await fotoKaydet(c); }catch(e){ yaz("Resim açılamadı: "+esc(e.message||e)); return; }
-  let skt="";
+  let skt="", ut="";
   try{
-    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=R.skt||""; }
-    if(!skt){ const tm=await TarihMotoru.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=tm&&tm.R&&tm.R.skt||""; }
+    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=R.skt||""; ut=R.ut||""; }
+    if(!skt){ const tm=await TarihMotoru.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=tm&&tm.R&&tm.R.skt||""; ut=ut||(tm&&tm.R&&tm.R.ut)||""; }
   }catch(e){ console.warn(e); }
+  if(skt && ut && skt<=ut) skt=""; // üretim tarihi STT sanılmasın
   if(V.aktifSayim!==s) return;
   s.fotolar=s.fotolar||{};
   if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); syHedefSec(barkod,sySktAnahtar(barkod,skt)); bip(); yaz("✅ Okunan tarih: <b>"+trTarih(skt)+"</b>. Yanlışsa doğru tarihe dokunun ya da yazın."); }
-  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz("Resim kaydedildi ama tarih okunamadı. Tarihe dokunun ya da yazın (örn. 190127)."); SY.bekleyenFoto={barkod,fotoId}; }
+  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz((ut?"Yalnız <b>üretim tarihi ("+trTarih(ut)+")</b> okunabildi, STT/TETT okunamadı. ":"Resim kaydedildi ama tarih okunamadı. ")+"STT/TETT'yi yazın (örn. 190127) ya da tarihe dokunun. İsterseniz yalnız STT/TETT yazan yeri yakından çekin."); SY.bekleyenFoto={barkod,fotoId}; }
 }
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;

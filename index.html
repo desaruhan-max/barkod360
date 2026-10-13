@@ -512,6 +512,12 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
 <!-- ============ YEDEK ============ -->
 <section class="tab" id="tab-yedek">
   <div class="sec-h"><h2>Yedekleme</h2></div>
+  <div class="card" id="ckKart">
+    <h3>🤖 Claude okuyucu (ürün bilgisini fotoğraftan okur)</h3>
+    <p class="hint">Claude anahtarınızı buraya yapıştırın. Anahtar yalnız bu cihazda saklanır, yedek dosyasına ve başka yere gitmez. Telefonda ve laptopta ayrı ayrı bir kez girilir.</p>
+    <div class="inrow" style="gap:8px;flex-wrap:wrap;align-items:center"><input id="ckAnahtar" type="password" autocomplete="off" placeholder="sk-ant-..." style="flex:1;min-width:220px"><button class="btn primary" id="ckKaydet">Kaydet</button><button class="btn" id="ckDene">Dene</button><button class="btn danger" id="ckSil">Sil</button></div>
+    <p class="small" id="ckDurum"></p>
+  </div>
   <div class="card">
     <h3>Yedek al</h3>
     <p class="hint">Tüm ürün kartları, partiler ve hareketler tek dosyaya kaydedilir. Haftada bir yedek alıp bir USB belleğe kopyalayın.</p>
@@ -983,8 +989,24 @@ window.tarihOku = async c => { const x=await TarihMotoru.oku(c,null,null); retur
    İnternet yoksa ya da izin verilmezse cihazdaki yazı okuma motoru kullanılır. */
 const ClaudeOkur = {
   s:null, kapali:false, hazir:null,
-  hazirla(){ if(!this.hazir) this.hazir=(async()=>{ if(!ARTIFACT) return null; try{ const s=await window.claude.use("sample"); if(!s) return null; const L=await s.limits().catch(()=>null); if(L&&L.images){ this.s=s; return s; } }catch(e){} return null; })(); return this.hazir; },
+  anahtar:"",
+  async anahtarAl(){ try{ this.anahtar=(await DB.al("claudeAnahtar"))||""; }catch(e){ this.anahtar=""; } return this.anahtar; },
+  async anahtarYaz(k){ k=(k||"").trim(); if(k) await DB.yaz("claudeAnahtar",k); else await DB.sil("claudeAnahtar"); this.anahtar=k; this.kapali=false; this.hazir=null; },
+  hazirla(){ if(!this.hazir) this.hazir=(async()=>{ if(!ARTIFACT){ await this.anahtarAl(); return this.anahtar?{api:true}:null; } try{ const s=await window.claude.use("sample"); if(!s) return null; const L=await s.limits().catch(()=>null); if(L&&L.images){ this.s=s; return s; } }catch(e){} return null; })(); return this.hazir; },
   async kullanilabilir(){ if(this.kapali||!navigator.onLine) return false; return !!(await this.hazirla()); },
+  async api(istem, blob, signal){ // telefon/laptop: kullanıcının kendi Claude anahtarıyla doğrudan
+    const b64=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(",")[1]); fr.onerror=rej; fr.readAsDataURL(blob); });
+    const y=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":this.anahtar,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:1500,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
+    const d=await y.json().catch(()=>({}));
+    if(!y.ok){ const m=(d.error&&d.error.message)||("HTTP "+y.status); const e=new Error(y.status===401?"Anahtar geçersiz":(y.status===400&&/credit/i.test(m)?"Kredi bitmiş":m)); e.code=y.status===401?"anahtar":"api"; if(y.status===401) this.kapali=true; throw e; }
+    const metin=(d.content||[]).map(c=>c.text||"").join(""); const a=metin.indexOf("{"), z=metin.lastIndexOf("}");
+    if(a<0||z<a) throw new Error("Claude yanıtı okunamadı"); return JSON.parse(metin.slice(a,z+1));
+  },
+  async urunFotoOku(f, ilerle){ // dosya/blob → okunmuş alanlar (sayım ve ürün kartı için)
+    const bm=await createImageBitmap(f); const c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0);
+    return {R:await this.oku(c,null,ilerle), c};
+  },
   async oku(canvas, kutu, ilerle){
     const sw=kutu?kutu.w:canvas.width, sh=kutu?kutu.h:canvas.height; const k=Math.min(1,1800/Math.max(sw,sh));
     const c=document.createElement("canvas"); c.width=Math.round(sw*k); c.height=Math.round(sh*k); c.getContext("2d").drawImage(canvas,kutu?kutu.x:0,kutu?kutu.y:0,sw,sh,0,0,c.width,c.height);
@@ -1003,12 +1025,14 @@ Kurallar:
 - isletme_no: "İşletme Kayıt No", "Onay No", "TR-34-K-012345" gibi.
 - uretici_unvani ve uretici_adresi: "Üretici", "Üretim Yeri", "İmalatçı", "Üreten Firma" bilgisi. Yoksa "Dağıtıcı/İthalatçı" bilgisini yazma.
 - alerjenler yalnız şu listeden: ${ALERJENLER.join(", ")}.
+- icindekiler: "İçindekiler"/"Bileşenler" listesinin tam metni (görünüyorsa).
+- urun_adi: ambalajın önündeki ürün adı (örn. "Tam Yağlı Süzme Peynir"); marka: firmanın marka adı.
 - saklama: "oda", "soguk" (0-4/+4 °C, buzdolabı) ya da "donuk" (-18 °C).
 Yalnız şu JSON nesnesini yaz:
-{"urun_adi":null,"marka":null,"uretici_unvani":null,"uretici_adresi":null,"isletme_no":null,"mensei":null,"net_miktar":null,"saklama":null,"alerjenler":[],"stt":null,"tett":null,"uretim_tarihi":null,"uretim_saati":null,"parti_no":null,"etiketteki_tarih_yazilari":[],"emin_degil":[]}`;
+{"urun_adi":null,"marka":null,"uretici_unvani":null,"uretici_adresi":null,"isletme_no":null,"mensei":null,"net_miktar":null,"saklama":null,"alerjenler":[],"icindekiler":null,"stt":null,"tett":null,"uretim_tarihi":null,"uretim_saati":null,"parti_no":null,"etiketteki_tarih_yazilari":[],"emin_degil":[]}`;
     let j;
     const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),45000); // yanıt gelmezse cihazdaki okuyucuya geç
-    try{ j=await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal,onText:()=>ilerle&&ilerle(.7,"Claude yazıyor…")}); clearTimeout(sure); }
+    try{ j = ARTIFACT ? await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal,onText:()=>ilerle&&ilerle(.7,"Claude yazıyor…")}) : await this.api(istem, blob, ctl.signal); clearTimeout(sure); }
     catch(e){ clearTimeout(sure); if(e&&e.code==="cancelled") e={code:"zaman_asimi",message:"Claude 45 sn içinde yanıt vermedi"}; if(e&&(e.code==="not_granted"||e.code==="images_unavailable")) this.kapali=true; throw e; }
     ilerle&&ilerle(1,"Claude okudu");
     const t=v=>(typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&tarihGecerli(+v.slice(0,4),+v.slice(5,7),+v.slice(8,10)))?v:"";
@@ -1016,7 +1040,7 @@ Yalnız şu JSON nesnesini yaz:
     const emin=new Set((j.emin_degil||[]).map(String));
     const R={tarihler:[], skt:"", sktTur:"", ut:t(j.uretim_tarihi), us:(/^\d{1,2}:\d{2}$/.test(j.uretim_saati||"")?j.uretim_saati.padStart(5,"0"):""), lot:str(j.parti_no), isletme:str(j.isletme_no),
       uretici:str(j.uretici_unvani), adres:str(j.uretici_adresi), net:str(j.net_miktar), mensei:str(j.mensei), saklama:["oda","soguk","donuk"].includes(j.saklama)?j.saklama:"",
-      alerjen:(j.alerjenler||[]).filter(a=>ALERJENLER.includes(a)), marka:str(j.marka), ad:str(j.urun_adi), supheli:[], claude:true};
+      alerjen:(j.alerjenler||[]).filter(a=>ALERJENLER.includes(a)), icerik:str(j.icindekiler), marka:str(j.marka), ad:str(j.urun_adi), supheli:[], claude:true};
     if(t(j.stt)){ R.skt=t(j.stt); R.sktTur="STT"; } else if(t(j.tett)){ R.skt=t(j.tett); R.sktTur="TETT"; }
     if(emin.has("stt")||emin.has("tett")) R.supheli.push("skt"); if(emin.has("uretim_tarihi")) R.supheli.push("ut"); if(emin.has("parti_no")) R.supheli.push("lot");
     if(R.skt) R.tarihler.push({iso:R.skt,tur:R.sktTur}); if(R.ut) R.tarihler.push({iso:R.ut,tur:"URETIM"});
@@ -1521,6 +1545,7 @@ function kbOcrUygula(R, zorla, sessiz){
     if(kbAlanYaz("u_isletme",R.isletme,false,false)) yaz.push("işletme no");
     if(kbAlanYaz("u_net",R.net,false,false)) yaz.push("net miktar");
     if(kbAlanYaz("u_mensei",R.mensei,false,false)) yaz.push("menşei");
+    if(kbAlanYaz("u_icerik",R.icerik,false,false)) yaz.push("içindekiler");
     if(R.saklama && !KB.urunVar){ $("#u_saklama").value=R.saklama; yaz.push("saklama"); }
     if(R.alerjen.length && !KB.urunVar){ kbAlerjenCiz([...new Set([...kbAlerjenler(),...R.alerjen])]); yaz.push("alerjen"); }
   }
@@ -2093,6 +2118,14 @@ SAYFA.defter = {
 /* ================== YEDEK ================== */
 SAYFA.yedek = {
   ilk(){
+    const ckGoster=async()=>{ const k=await ClaudeOkur.anahtarAl(); $("#ckDurum").innerHTML=k?'✅ Anahtar kayıtlı (…'+esc(k.slice(-4))+'). Yeni ürünlerin fotoğrafı Claude ile okunur.':'Anahtar girilmedi. Fotoğraflar telefondaki okuyucuyla okunur (yalnız tarih).'; };
+    ckGoster();
+    $("#ckKaydet").onclick=async()=>{ const k=$("#ckAnahtar").value.trim(); if(!/^sk-ant-/.test(k)){ toast("Anahtar sk-ant- ile başlamalı",1); return; } await ClaudeOkur.anahtarYaz(k); $("#ckAnahtar").value=""; ckGoster(); toast("Anahtar kaydedildi"); };
+    $("#ckSil").onclick=async()=>{ if(await onayla("Claude anahtarı bu cihazdan silinsin mi?","Sil")){ await ClaudeOkur.anahtarYaz(""); ckGoster(); } };
+    $("#ckDene").onclick=async()=>{ if(!(await ClaudeOkur.anahtarAl())){ toast("Önce anahtarı kaydedin",1); return; } $("#ckDurum").textContent="⏳ Deneniyor…";
+      try{ const c=document.createElement("canvas"); c.width=600; c.height=200; const g=c.getContext("2d"); g.fillStyle="#fff"; g.fillRect(0,0,600,200); g.fillStyle="#000"; g.font="bold 34px sans-serif"; g.fillText("DENEME SÜT 1 L",20,70); g.font="28px sans-serif"; g.fillText("S.T.T: 15.03.2027",20,140);
+        ClaudeOkur.kapali=false; const R=await ClaudeOkur.oku(c); $("#ckDurum").innerHTML=R.skt==="2027-03-15"?"✅ Çalışıyor. Claude deneme etiketini doğru okudu.":"⚠ Claude yanıt verdi ama deneme tarihini farklı okudu ("+esc(R.skt||"boş")+").";
+      }catch(e){ $("#ckDurum").innerHTML='<span class="neg">❌ '+esc(e.message||e)+"</span>"; } };
     $("#ykAl").onclick=async()=>{ const y={uygulama:"BARKOD360",tarih:new Date().toISOString(),veri:V,foto:{}};
       if($("#ykFoto").checked){ const ks=(await DB.anahtarlar()).filter(k=>String(k).startsWith("foto:")); for(const k of ks) y.foto[k]=await DB.al(k); }
       indir("BARKOD360_yedek_"+bugun()+".json",JSON.stringify(y),"application/json"); V.ayar.sonYedek=new Date().toISOString(); kaydet(); this.goster(); toast("Yedek indirildi (İndirilenler klasörü)"); };

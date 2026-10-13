@@ -2283,14 +2283,14 @@ SAYFA.yedek = {
       V.urunler={}; V.lotlar={}; V.hareketler=[]; V.sayimlar=[]; V.aktifSayim=null; if(typeof SY!=="undefined"){ SY.son=null; SY.hedef={}; SY.grup=null; }
       kaydet(); urunListesiGuncelle(); toast("Bütün kayıtlar silindi"); setTimeout(()=>sekme("konsol"),300); };
     $("#ghQrGoster").onclick=async()=>{ await GH.ayarAl(); if(!GH.ayar){ toast("Önce bu cihazda bağlanın",1); return; }
-      const veri="B360SENK:"+btoa(JSON.stringify({repo:GH.ayar.repo,token:GH.ayar.token}));
+      const ck=await ClaudeOkur.anahtarAl(); const veri="B360SENK:"+btoa(JSON.stringify({repo:GH.ayar.repo,token:GH.ayar.token,...(ck?{claude:ck}:{})}));
       let svg=""; try{ svg=await Barkod.svg(veri,"QRCode"); }catch(e){ toast("QR oluşturulamadı: "+e.message,1); return; }
-      dlg("Diğer cihaza aktar",`<p>Diğer cihazda programı açın: <b>Yedekleme → 📷 QR ile bağlan</b>'a basıp bu kodun fotoğrafını çekin.</p><div style="max-width:320px;margin:10px auto;background:#fff;padding:12px">${svg}</div><p class="hint">Bu kod eşitleme anahtarınızı içerir. Ekran görüntüsünü kimseyle paylaşmayın.</p>`,[{t:"Kapat",c:"primary"}]); };
+      dlg("Diğer cihaza aktar",`${ck?'<p>✅ Bu kod <b>Claude okuyucu anahtarını</b> da içeriyor.</p>':""}<p>Diğer cihazda programı açın: <b>Yedekleme → 📷 QR ile bağlan</b>'a basıp bu kodun fotoğrafını çekin.</p><div style="max-width:320px;margin:10px auto;background:#fff;padding:12px">${svg}</div><p class="hint">Bu kod eşitleme anahtarınızı içerir. Ekran görüntüsünü kimseyle paylaşmayın.</p>`,[{t:"Kapat",c:"primary"}]); };
     $("#ghQrOku").onclick=async()=>{ const f=await gorselSec(true); if(!f) return; $("#ghDurum").textContent="⏳ QR okunuyor…";
       try{ const bm=await createImageBitmap(f); const c=document.createElement("canvas"); const k=Math.min(1,2000/Math.max(bm.width,bm.height)); c.width=Math.round(bm.width*k); c.height=Math.round(bm.height*k); c.getContext("2d").drawImage(bm,0,0,c.width,c.height);
         const r=await Barkod.oku(c.getContext("2d").getImageData(0,0,c.width,c.height)); const q=(r||[]).map(x=>x.text).find(t=>String(t).startsWith("B360SENK:"));
         if(!q) throw new Error("Fotoğrafta BARKOD360 QR kodu bulunamadı. Kodu ekrana daha yakından, net çekin.");
-        const o=JSON.parse(atob(q.slice(9))); await GH.dene(o.repo,o.token); await DB.yaz("ghAyar",{repo:o.repo,token:o.token}); await DB.yaz("ghOkunan",{}); await DB.yaz("ghSha",{}); await ghBaslat(); ghGoster(); toast("Eşitleme açıldı");
+        const o=JSON.parse(atob(q.slice(9))); if(o.claude){ await ClaudeOkur.anahtarYaz(o.claude); ckGoster(); } await GH.dene(o.repo,o.token); await DB.yaz("ghAyar",{repo:o.repo,token:o.token}); await DB.yaz("ghOkunan",{}); await DB.yaz("ghSha",{}); await ghBaslat(); ghGoster(); toast("Eşitleme açıldı");
       }catch(e){ $("#ghDurum").innerHTML='<span class="neg">❌ '+esc(e.message||e)+"</span>"; } };
     $("#ghKes").onclick=async()=>{ if(await onayla("Bu cihazda eşitleme kapatılsın mı? (Kayıtlar silinmez.)","Kapat")){ await DB.sil("ghAyar"); GH.ayar=null; SENK.db=null; SENK.assets=null; senkGoster(); ghGoster(); } };
     const ckGoster=async()=>{ const k=await ClaudeOkur.anahtarAl(); $("#ckDurum").innerHTML=k?'✅ Anahtar kayıtlı (…'+esc(k.slice(-4))+'). Yeni ürünlerin fotoğrafı Claude ile okunur.':'Anahtar girilmedi. Fotoğraflar telefondaki okuyucuyla okunur (yalnız tarih).'; };

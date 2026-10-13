@@ -334,6 +334,7 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
             <label class="f">Ürün grubu<select id="u_grup"></select></label>
             <label class="f">Stok birimi *<select id="u_birim"></select></label>
             <label class="f">Ambalaj net miktarı<input id="u_net" placeholder="Örn. 1 kg / 500 g / 1 lt"></label>
+            <label class="f">Kolide kaç adet var<input id="u_koliAdet" type="number" min="0" step="1" placeholder="Örn. 12"></label>
             <label class="f">Saklama koşulu<select id="u_saklama"></select></label>
             <label class="f w2">Üretici firma unvanı<input id="u_uretici" placeholder="Örn. ... Gıda San. ve Tic. A.Ş."></label>
             <label class="f w2">Üretici adresi<textarea id="u_adres" rows="2"></textarea></label>
@@ -365,7 +366,7 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
 
         <fieldset><legend>5 · Teslimat</legend>
           <div class="fg">
-            <label class="f">Miktar * <span id="l_birimTxt"></span><span class="inrow"><button type="button" class="btn adim" onclick="miktarDegis('l_miktar',-1)">−</button><input id="l_miktar" type="number" min="0" step="any" inputmode="decimal"><button type="button" class="btn adim" onclick="miktarDegis('l_miktar',1)">+</button></span></label>
+            <label class="f">Miktar * <span id="l_birimTxt"></span><span class="inrow"><button type="button" class="btn adim" onclick="miktarDegis('l_miktar',-1)">−</button><input id="l_miktar" type="number" min="0" step="any" inputmode="decimal"><button type="button" class="btn adim" onclick="miktarDegis('l_miktar',1)">+</button><button type="button" class="btn adim" id="l_koliEkle" title="Bir koli ekle">+koli</button></span><span class="small muted" id="l_koliTxt"></span></label>
             <label class="f">Birim fiyat (₺, KDV hariç)<input id="l_fiyat" type="number" min="0" step="any"></label>
             <label class="f">Tedarikçi<select id="l_ted"></select></label>
             <label class="f">İrsaliye / Fatura no<input id="l_irs"></label>
@@ -711,7 +712,12 @@ function hesapla(){
 const kalanOf = id => KALAN[id]||0;
 const aktifKres = () => V.ayar.aktifKres;
 function hareketEkle(h){ h.id=h.id||uid("h"); h.t=h.t||new Date().toISOString(); V.hareketler.push(h); return h; }
-function urunBul(kod){ if(!kod) return null; if(V.urunler[kod]) return V.urunler[kod];
+// KOLİ: ürün kartında "kolide kaç adet" (koliAdet) ve isteğe bağlı koli barkodu (koliBarkod) tutulur; stok hep adet (stok birimi) cinsindendir
+function koliUrun(kod){ if(!kod) return null; const k=String(kod).replace(/^0+/,""); for(const b in V.urunler){ const u=V.urunler[b]; if(u.koliBarkod && String(u.koliBarkod).replace(/^0+/,"")===k) return u; } return null; }
+function koliCarpan(kod){ const u=koliUrun(kod); return u&&u.koliAdet>1?+u.koliAdet:1; }
+function koliMetin(u, m){ const ka=u&&+u.koliAdet; if(!(ka>1)||!m) return ""; const neg=m<0; m=Math.abs(m); const k=Math.floor(m/ka+1e-9), r=yuvarla(m-k*ka); return (neg?"−":"")+(k?k+" koli":"")+(k&&r?" + ":"")+(r?nf(r)+" "+(u.birim||""):""); }
+function miktarYaz(u, m){ const km=koliMetin(u,m); return nf(m)+" "+esc((u&&u.birim)||"")+(km?' <span class="small muted">('+esc(km)+')</span>':""); }
+function urunBul(kod){ if(!kod) return null; if(V.urunler[kod]) return V.urunler[kod]; const ku=koliUrun(kod); if(ku) return ku;
   // GTIN-14 / UPC-A eşleştirme
   const k=String(kod).replace(/^0+/,""); for(const b in V.urunler){ if(b.replace(/^0+/,"")===k) return V.urunler[b]; }
   return null; }
@@ -776,7 +782,7 @@ function sktUyariGoster(zorla){
   sktTelefonBildirimi(liste);
   const izinVar=("Notification" in window)&&Notification.permission==="granted";
   const b=dlg("⚠ Tarihi yaklaşan ürünler",`<p class="hint" style="margin-top:0">Tarihi geçmiş ve ${SKT_UYARI_GUN} gün içinde dolacak ürünler (tüm kreşler). Önce bunları kullanın.</p>
-    <div class="tw"><table class="rt"><thead><tr><th></th><th>Ürün</th><th>Kreş</th><th>STT/TETT</th><th class="r">Kalan</th></tr></thead><tbody>${liste.map(x=>`<tr><td><img data-g="${esc(x.barkod)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;visibility:hidden"></td><td><b>${esc(x.ad)}</b>${x.lot?'<div class="small muted">Lot '+esc(x.lot)+"</div>":""}</td><td>${esc(KISA[x.kres]||x.kres)}</td><td>${sktPill(x.skt)}<div class="small">${x.tur} ${trTarih(x.skt)}</div></td><td class="r"><b>${nf(x.kalan)}</b> ${esc(x.birim)}</td></tr>`).join("")}</tbody></table></div>
+    <div class="tw"><table class="rt"><thead><tr><th></th><th>Ürün</th><th>Kreş</th><th>STT/TETT</th><th class="r">Kalan</th></tr></thead><tbody>${liste.map(x=>`<tr><td><img data-g="${esc(x.barkod)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;visibility:hidden"></td><td><b>${esc(x.ad)}</b>${x.lot?'<div class="small muted">Lot '+esc(x.lot)+"</div>":""}</td><td>${esc(KISA[x.kres]||x.kres)}</td><td>${sktPill(x.skt)}<div class="small">${x.tur} ${trTarih(x.skt)}</div></td><td class="r"><b>${miktarYaz(V.urunler[x.barkod],x.kalan)}</b></td></tr>`).join("")}</tbody></table></div>
     ${izinVar?"":'<div class="banner" style="margin-top:10px"><span>Bu uyarı telefonunuza bildirim olarak da gelsin mi?</span><button class="btn sm primary" id="sktIzin">Bildirimleri aç</button></div>'}`,
     [{t:"Kapat"},{t:"STT/TETT listesine git",c:"primary",f:()=>{ setTimeout(()=>sekme("skt"),30); }}],true);
   gorselYukle(b); const iz=$("#sktIzin",b); if(iz) iz.onclick=()=>sktBildirimIzni();
@@ -1331,7 +1337,7 @@ SAYFA.konsol = { goster(){
 
 /* ================== MAL KABUL ================== */
 const KB = {otoNo:0, kam:null, analiz:null, barkod:"", urunVar:false, foto:null, kirli:false, ocrAlan:new Set(), kullaniciAlan:new Set(), ocrSayac:0};
-const KB_URUN = ["barkod","ad","marka","grup","birim","net","saklama","uretici","adres","isletme","mensei","acilis","min","icerik"];
+const KB_URUN = ["barkod","ad","marka","grup","birim","net","saklama","uretici","adres","isletme","mensei","acilis","min","icerik","koliAdet"];
 function kbAlerjenCiz(sec){ $("#u_alerjen").innerHTML=ALERJENLER.map(a=>`<button type="button" data-a="${esc(a)}" class="${(sec||[]).includes(a)?"on":""}">${esc(a)}</button>`).join(""); }
 function kbAlerjenler(){ return $$("#u_alerjen button.on").map(b=>b.dataset.a); }
 function kbSifirla(){
@@ -1428,7 +1434,7 @@ async function kbBarkod(a){
   if(KB.barkod && kod===KB.barkod && a.foto) return; // aynı ürünün ikinci fotoğrafı: yalnız yazı okunur
   if(KB.barkod && kod===KB.barkod){ // aynı ürün tekrar okutuldu
     if(a.lot && a.lot!==$("#l_lot").value && $("#l_lot").value){ /* farklı parti */ }
-    else { const m=$("#l_miktar"); m.value=yuvarla((+m.value||0)+(a.tartili?a.tartili.kg:1)); m.classList.add("okundu"); setTimeout(()=>m.classList.remove("okundu"),500); toast("Miktar: "+m.value+" "+$("#u_birim").value); return; }
+    else { const m=$("#l_miktar"); m.value=yuvarla((+m.value||0)+(a.tartili?a.tartili.kg:koliCarpan(a.gtin))); m.classList.add("okundu"); setTimeout(()=>m.classList.remove("okundu"),500); toast("Miktar: "+m.value+" "+$("#u_birim").value); return; }
   }
   if(KB.barkod && KB.kirli){
     const eskiAd=$("#u_ad").value||KB.barkod; let ok=false;
@@ -1441,10 +1447,10 @@ async function kbBarkod(a){
   if(u){ KB.urunVar=true; kbUrunDoldur(u); kbUrunGoster(true);
     const s=u.son||{}; if(s.ted) $("#l_ted").value=s.ted; if(s.fiyat!=null) $("#l_fiyat").value=s.fiyat; if(s.sktTur) $("#l_tur").value=s.sktTur;
   } else { KB.urunVar=false; kbUrunGoster(false); if(a.ulke==="Türkiye") $("#u_mensei").value="Türkiye"; setTimeout(()=>$("#u_ad").focus(),50); }
-  $("#l_miktar").value = a.tartili?a.tartili.kg : (a.adetAI||1);
+  $("#l_miktar").value = a.tartili?a.tartili.kg : (a.adetAI||1)*koliCarpan(a.gtin);
   if(a.lot) $("#l_lot").value=a.lot; if(a.skt){ $("#l_skt").value=a.skt; if(a.sktTur) $("#l_tur").value=a.sktTur; } if(a.ut) $("#l_ut").value=a.ut;
   $("#l_birimTxt").textContent="("+$("#u_birim").value+")";
-  kbAnalizGoster(a,u); kbKalanGoster(); kbSicDur();
+  kbAnalizGoster(a,u); kbKalanGoster(); kbSicDur(); setTimeout(()=>{ const e=$("#l_miktar"); e&&e.dispatchEvent(new Event("input")); });
   const uy=[]; if(a.gecerli===false) uy.push("Barkodun kontrol hanesi tutmuyor. Yanlış okunmuş olabilir, tekrar okutun.");
   if(!u) uy.push("Yeni ürün. Üretici ve adres yazan yüzün de fotoğrafını çekin"+(ARTIFACT?"":" (ya da kameraya tutup <b>Boşluk</b>a basın)")+": marka, üretici ve adres yazıdan alınır. Bir kez kaydedilir, sonraki teslimatlarda kendiliğinden gelir.");
   $("#kbUyari").innerHTML=uy.map(x=>`<div class="banner"><span>${x}</span></div>`).join("");
@@ -1578,7 +1584,7 @@ async function kbKaydet(sessiz){
   // ürün kartı
   const eski=V.urunler[barkod]||{};
   const u=Object.assign({}, eski, {barkod, ad, marka:$("#u_marka").value.trim(), grup:$("#u_grup").value, birim:$("#u_birim").value, net:$("#u_net").value.trim(), saklama:$("#u_saklama").value,
-    icerik:$("#u_icerik").value.trim(), uretici:$("#u_uretici").value.trim(), adres:$("#u_adres").value.trim(), isletme:$("#u_isletme").value.trim(), mensei:$("#u_mensei").value.trim(),
+    icerik:$("#u_icerik").value.trim(), koliAdet:$("#u_koliAdet").value===""?(eski.koliAdet??null):+$("#u_koliAdet").value, uretici:$("#u_uretici").value.trim(), adres:$("#u_adres").value.trim(), isletme:$("#u_isletme").value.trim(), mensei:$("#u_mensei").value.trim(),
     acilis:$("#u_acilis").value===""?null:+$("#u_acilis").value, min:$("#u_min").value===""?null:+$("#u_min").value, alerjen:kbAlerjenler(),
     tanimsiz:false, tartili:(KB.analiz&&KB.analiz.tartili)?true:(eski.tartili||false), olusturma:eski.olusturma||new Date().toISOString()});
   const fiyat=$("#l_fiyat").value===""?null:+$("#l_fiyat").value;
@@ -1616,6 +1622,9 @@ SAYFA.kabul = {
     $("#kbTarihFoto").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) kbTarihDosya(f); }; kbAdim2();
     const gAl=async kam=>{ const f=await gorselSec(kam); if(!f) return; try{ KB.gorselId=await gorselKaydet(f); KB.kirli=true; kbGorselGoster(); toast("Ürün görseli eklendi, kayıtta ürüne bağlanır"); }catch(e){ toast("Görsel alınamadı: "+e.message,1); } };
     $("#u_gorselCek").onclick=()=>gAl(true); $("#u_gorselGal").onclick=()=>gAl(false);
+    const koliTxt=()=>{ const ka=+$("#u_koliAdet").value; $("#l_koliTxt").textContent=ka>1?koliMetin({koliAdet:ka,birim:$("#u_birim").value},+$("#l_miktar").value||0):""; };
+    $("#l_koliEkle").onclick=()=>{ const ka=+$("#u_koliAdet").value; if(!(ka>0)){ toast("Önce ürün kartında \"Kolide kaç adet var\" kutusunu doldurun",1); kbUrunGoster(false); $("#u_koliAdet").focus(); return; } const m=$("#l_miktar"); m.value=yuvarla((+m.value||0)+ka); koliTxt(); };
+    $("#l_miktar").addEventListener("input",koliTxt); $("#u_koliAdet").addEventListener("input",koliTxt);
     $("#kbHtTur").onclick=e=>{ const b=e.target.closest("button"); if(!b) return; $$("#kbHtTur button").forEach(x=>x.classList.toggle("on",x===b)); $("#l_tur").value=b.dataset.t; kbAdim2(); };
     $("#kbHt").addEventListener("input",e=>{ const v=e.target.value.replace(/\D/g,""); const t=hizliTarihCoz(v);
       if(t && (v.length===6||v.length===8||(v.length===4 && e.target.value.length>=4))){ if(v.length===4){ $("#l_tur").value="TETT"; $$("#kbHtTur button").forEach(x=>x.classList.toggle("on",x.dataset.t==="TETT")); } else $("#l_tur").value=$("#kbHtTur button.on").dataset.t;
@@ -1674,7 +1683,7 @@ function ckLotCiz(){
   $("#ckLot").innerHTML=`<label class="${!CK.lotId?"on":""}"><input type="radio" name="ckl" value="" ${!CK.lotId?"checked":""}> <b>Otomatik (FEFO)</b>: son tüketim tarihi en yakın parti önce çıkar</label>`+
     ls.map(l=>{ const uy=ckUygunMu(l); return `<label class="${CK.lotId===l.id?"on":""} ${uy?"":"x"}"><input type="radio" name="ckl" value="${l.id}" ${CK.lotId===l.id?"checked":""} ${uy?"":"disabled"}>
       <span style="flex:1">Lot <b>${esc(l.lot||"—")}</b> · ${l.sktTur||"STT"} ${trTarih(l.skt)||"—"} · giriş ${trTarih(l.girisTarihi)}${l.bloke?' <span class="pill bad">BLOKE</span>':""}</span>
-      ${sktPill(l.skt)} <b>${nf(kalanOf(l.id))} ${esc(u.birim)}</b></label>`; }).join("") || '<div class="empty">Bu kreşte stok yok</div>';
+      ${sktPill(l.skt)} <b>${miktarYaz(u,kalanOf(l.id))}</b></label>`; }).join("") || '<div class="empty">Bu kreşte stok yok</div>';
   $$("#ckLot input").forEach(i=>i.onchange=()=>{ CK.lotId=i.value; $$("#ckLot label").forEach(l=>l.classList.toggle("on",$("input",l).checked)); ckDagilim(); });
 }
 function ckPlan(){
@@ -1726,7 +1735,8 @@ function syBarkod(a){
   let lotId=null; if(a.lot){ const l=lotlarOf(u.barkod,s.kres).find(x=>(x.lot||"")===a.lot && (!a.skt||x.skt===a.skt)); if(l) lotId=l.id; }
   if(!lotId && a.skt) lotId=sySktAnahtar(u.barkod,a.skt);
   if(!lotId) lotId=syVarsayilanHedef(u.barkod);
-  const art=a.tartili?a.tartili.kg:(a.adetAI||1);
+  const kc=koliCarpan(a.gtin); const art=a.tartili?a.tartili.kg:(a.adetAI||1)*kc;
+  if(kc>1) toast("Koli okutuldu: +"+kc+" "+u.birim);
   syEkle(u.barkod, lotId, art, true);
 }
 // Bu ürün için sayımın gideceği STT/TETT: son seçilen; yoksa stokta tek parti varsa o
@@ -1834,7 +1844,8 @@ function sySonCiz(){
     <div class="inrow" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="sySktYeni" style="max-width:170px"><button class="btn sm" id="sySktEkle">+ Yeni tarih ekle</button><button class="btn sm gold" id="sySktFoto">📸 Tarihin fotoğrafı</button></div>
     <div class="small muted" id="sySktDur"></div>
     <div class="inrow" style="margin-top:10px;align-items:center"><button class="btn" id="syEksi">−1</button><input id="sySay" type="number" step="any" value="${x?x.miktar:0}" style="text-align:center;font-weight:800;font-size:18px"><button class="btn" id="syArti">+1</button><span class="small" style="white-space:nowrap">${esc(u.birim)}</span></div>
-    <div class="small muted" style="margin-top:4px">${lotId?"Bu tarihte sayılan":"Tarihsiz sayılan"} · Sistemde toplam: ${nf(stokOf(barkod,s.kres))} ${esc(u.birim)} · Sayılan toplam: ${nf(syUrunSayilan(s,barkod))}</div></div>`;
+    ${u.koliAdet>1?`<div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><button class="btn sm" id="syKoliEksi">−1 koli</button><button class="btn sm primary" id="syKoliArti">+1 koli (${nf(u.koliAdet)} ${esc(u.birim)})</button><span class="small muted">${x&&koliMetin(u,x.miktar)?esc(koliMetin(u,x.miktar)):""}</span></div>`:`<div class="small muted" style="margin-top:6px">Koli ile saymak için <a href="#" id="syKoliTanim">kolide kaç ${esc(u.birim)} olduğunu yazın</a>.</div>`}
+    <div class="small muted" style="margin-top:4px">${lotId?"Bu tarihte sayılan":"Tarihsiz sayılan"} · Sistemde toplam: ${miktarYaz(u,stokOf(barkod,s.kres))} · Sayılan toplam: ${nf(syUrunSayilan(s,barkod))}</div></div>`;
   gorselYukle(e);
   $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
   const g=$("#syGorsel"); if(g) g.onclick=async()=>{ if(await urunGorselDegistir(barkod,true)) sySonCiz(); };
@@ -1842,6 +1853,8 @@ function sySonCiz(){
   $("#sySktEkle").onclick=()=>{ const t=$("#sySktYeni").value; if(!t){ toast("Önce tarihi seçin",1); return; } syHedefSec(barkod,sySktAnahtar(barkod,t)); };
   $("#sySktFoto").onclick=()=>sySktFoto(barkod);
   $("#syEksi").onclick=()=>syEkle(barkod,lotId,-1); $("#syArti").onclick=()=>syEkle(barkod,lotId,1,true);
+  const ka=$("#syKoliArti"); if(ka){ ka.onclick=()=>syEkle(barkod,lotId,+u.koliAdet,true); $("#syKoliEksi").onclick=()=>syEkle(barkod,lotId,-u.koliAdet); }
+  const kt=$("#syKoliTanim"); if(kt) kt.onclick=ev=>{ ev.preventDefault(); urunDuzenle(barkod); };
   $("#sySay").onchange=ev=>{ const yeni=+ev.target.value||0; const eski=x?x.miktar:0; syEkle(barkod,lotId,yuvarla(yeni-eski)); };
 }
 // Sayımdan bir ürünü tamamen çıkar; sayımda açılmış adsız kart başka yerde kullanılmıyorsa o da silinir
@@ -1859,7 +1872,7 @@ function syTablo(){
   const okut=r.filter(x=>x.okutuldu).length; const fk=r.filter(x=>x.okutuldu&&x.fark).length;
   $("#syOzet").textContent=`${okut} / ${r.length} ürün okutuldu · ${fk} farklı`;
   if(SY.sadeceFark) r=r.filter(x=>x.okutuldu&&x.fark); if(SY.ara){ const t=katla(SY.ara); r=r.filter(x=>katla(x.u.ad+" "+(x.u.marka||"")+" "+x.b).includes(t)); }
-  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}</td><td class="r">${nf(x.sis)}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b></td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-duz="${esc(x.b)}">${x.u.tanimsiz?"✎ Adını yaz":"✎ Düzenle"}</button> ${x.okutuldu?`<button class="btn sm danger" data-cikar="${esc(x.b)}">🗑 Sil</button>`:`<button class="btn sm" data-elle="${esc(x.b)}">Say</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
+  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}</td><td class="r">${nf(x.sis)}${koliMetin(x.u,x.sis)?'<div class="small muted">'+esc(koliMetin(x.u,x.sis))+"</div>":""}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b>${x.okutuldu&&koliMetin(x.u,x.say)?'<div class="small muted">'+esc(koliMetin(x.u,x.say))+"</div>":""}</td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-duz="${esc(x.b)}">${x.u.tanimsiz?"✎ Adını yaz":"✎ Düzenle"}</button> ${x.okutuldu?`<button class="btn sm danger" data-cikar="${esc(x.b)}">🗑 Sil</button>`:`<button class="btn sm" data-elle="${esc(x.b)}">Say</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
   $$("#syTablo [data-duz]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); urunDuzenle(b.dataset.duz); });
   $$("#syTablo [data-cikar]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); syCikar(b.dataset.cikar); });
   $$("#syTablo [data-elle]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); SY.son={barkod:b.dataset.elle,lotId:null}; if(!s.sayilan[b.dataset.elle]) s.sayilan[b.dataset.elle]={barkod:b.dataset.elle,lotId:null,miktar:0}; sySonCiz(); syTablo(); const i=$("#sySay"); i&&i.select(); });
@@ -1899,7 +1912,7 @@ function syIsle(bosSifir){
     let tutar=0, fiyatYok=false;
     for(const id in hedef){ const f=yuvarla(hedef[id]-kalanOf(id)); if(Math.abs(f)>1e-9){ const l=V.lotlar[id]; const fy=l.fiyat??x.fiyat; hareketEkle({tur:"SAYIM",kres:s.kres,barkod:x.b,lotId:id,miktar:f,fiyat:fy,ack:"Sayım "+(s.sayan?"("+s.sayan+")":""),grup}); if(fy!=null) tutar+=f*fy; else fiyatYok=true; } }
     const fark=yuvarla(x.okutuldu?x.say-x.sis:-x.sis);
-    satirlar.push({barkod:x.b, ad:x.u.ad, marka:x.u.marka||"", birim:x.u.birim, skt:sktDag.filter(d=>d[1]>0).sort().map(d=>(d[0]?trTarih(d[0]):"tarihsiz")+": "+nf(d[1])).join(", "), sistem:x.sis, sayilan:x.okutuldu?x.say:0, fark, fiyat:x.fiyat, tutar:fiyatYok&&!tutar?null:yuvarla(tutar)});
+    satirlar.push({barkod:x.b, ad:x.u.ad, marka:x.u.marka||"", birim:x.u.birim, koli:koliMetin(x.u,x.okutuldu?x.say:0), skt:sktDag.filter(d=>d[1]>0).sort().map(d=>(d[0]?trTarih(d[0]):"tarihsiz")+": "+nf(d[1])).join(", "), sistem:x.sis, sayilan:x.okutuldu?x.say:0, fark, fiyat:x.fiyat, tutar:fiyatYok&&!tutar?null:yuvarla(tutar)});
   }
   const kayit={id:s.id,kres:s.kres,bas:s.bas,bit:new Date().toISOString(),sayan:s.sayan,not:s.not,satirlar,farkTutar:satirlar.reduce((t,x)=>t+(x.tutar||0),0),grup};
   V.sayimlar.push(kayit); V.aktifSayim=null; if(SY.kam) SY.kam.kapat(); kaydet(); SY.son=null;
@@ -1909,7 +1922,7 @@ function syTutanak(k){
   const satir=k.satirlar.slice().sort((a,b)=>a.ad.localeCompare(b.ad,"tr"));
   const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}</p>
     <table><thead><tr><th>#</th><th>Ürün</th><th>Marka</th><th>Barkod</th><th>Birim</th><th>Sistem</th><th>Sayılan</th><th>STT/TETT dağılımı</th><th>Fark</th><th>Birim ₺</th><th>Fark ₺</th></tr></thead><tbody>
-    ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}</td><td class="small">${esc(x.skt||"")}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
+    ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${esc(x.skt||"")}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
     </tbody><tfoot><tr><td colspan="10" style="text-align:right"><b>Toplam fark</b></td><td style="text-align:right"><b>${tl(k.farkTutar)}</b></td></tr></tfoot></table>
     <table style="margin-top:28px;border:0"><tr><td style="border:0;width:33%">Sayımı yapan<br><br>${esc(k.sayan||"")}<br>İmza:</td><td style="border:0;width:33%">Mutfak sorumlusu<br><br><br>İmza:</td><td style="border:0">Onaylayan<br><br><br>İmza:</td></tr></table></div>`;
   const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},{t:"Excel'e aktar",f:()=>{ csvIndir("sayim_"+KISA[k.kres]+"_"+k.bit.slice(0,10)+".csv",[["Ürün","Marka","Barkod","Birim","Sistem","Sayılan","STT/TETT dağılımı","Fark","Birim fiyat","Fark tutarı"],...satir.map(x=>[x.ad,x.marka,x.barkod,x.birim,csvSayi(x.sistem),csvSayi(x.sayilan),x.skt||"",csvSayi(x.fark),csvSayi(x.fiyat),csvSayi(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null))])]); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);
@@ -1940,7 +1953,7 @@ SAYFA.stok = {
     if(!r.length){ $("#stTablo").innerHTML='<div class="empty">Gösterilecek stok yok</div>'; return; }
     const top=r.reduce((t,x)=>t+x.deger,0);
     $("#stTablo").innerHTML=`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th>Marka</th><th>Grup</th><th class="r">Miktar</th><th>Birim</th><th class="r">Parti</th><th>En yakın STT/TETT</th><th class="r">Değer</th><th>Durum</th></tr></thead><tbody>
-      ${r.map(x=>{ const az=x.u.min>0&&kap!=="tum"&&x.mik<x.u.min; return `<tr class="tik" data-b="${esc(x.b)}"><td><b>${esc(x.u.ad)}</b><div class="small muted">${esc(x.b)}</div></td><td>${esc(x.u.marka||"")}</td><td class="m">${esc(x.u.grup||"")}</td><td class="r"><b>${nf(x.mik)}</b></td><td>${esc(x.u.birim)}</td><td class="r">${x.lot}</td><td>${x.skt?trTarih(x.skt)+" "+sktPill(x.skt):""}</td><td class="r">${x.deger?tl(x.deger):""}</td><td>${az?'<span class="pill no">Asgari altı ('+nf(x.u.min)+')</span>':""}${x.bloke?' <span class="pill bad">bloke parti</span>':""}${x.mik<=0?'<span class="pill gh">bitti</span>':""}</td></tr>`; }).join("")}
+      ${r.map(x=>{ const az=x.u.min>0&&kap!=="tum"&&x.mik<x.u.min; return `<tr class="tik" data-b="${esc(x.b)}"><td><b>${esc(x.u.ad)}</b><div class="small muted">${esc(x.b)}</div></td><td>${esc(x.u.marka||"")}</td><td class="m">${esc(x.u.grup||"")}</td><td class="r"><b>${nf(x.mik)}</b>${koliMetin(x.u,x.mik)?'<div class="small muted">'+esc(koliMetin(x.u,x.mik))+"</div>":""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.lot}</td><td>${x.skt?trTarih(x.skt)+" "+sktPill(x.skt):""}</td><td class="r">${x.deger?tl(x.deger):""}</td><td>${az?'<span class="pill no">Asgari altı ('+nf(x.u.min)+')</span>':""}${x.bloke?' <span class="pill bad">bloke parti</span>':""}${x.mik<=0?'<span class="pill gh">bitti</span>':""}</td></tr>`; }).join("")}
       </tbody><tfoot><tr><td colspan="7">Toplam ${r.length} ürün</td><td class="r">${tl(top)}</td><td></td></tr></tfoot></table></div>`;
     $$("#stTablo tr[data-b]").forEach(t=>t.onclick=()=>urunDetay(t.dataset.b, kap==="tum"?null:aktifKres()));
   },
@@ -1963,7 +1976,7 @@ function urunDetay(barkod, kres){
 }
 function lotSayimDuzelt(id, sonra){
   const l=V.lotlar[id], u=V.urunler[l.barkod];
-  dlg("Sayım düzelt · Lot "+(l.lot||"—"),`<p>Sistemde: <b>${nf(kalanOf(id))} ${esc(u.birim)}</b></p><label class="f">Sayılan miktar<input id="sd_m" type="number" step="any" value="${kalanOf(id)}"></label><label class="f">Açıklama<input id="sd_a" placeholder="Örn. ay sonu sayımı"></label>`,
+  dlg("Sayım düzelt · Lot "+(l.lot||"—"),`<p>Sistemde: <b>${miktarYaz(u,kalanOf(id))}</b></p><label class="f">Sayılan miktar<input id="sd_m" type="number" step="any" value="${kalanOf(id)}"></label><label class="f">Açıklama<input id="sd_a" placeholder="Örn. ay sonu sayımı"></label>`,
     [{t:"Vazgeç",f:()=>{ sonra&&setTimeout(sonra); }},{t:"Kaydet",c:"primary",f:()=>{ const f=yuvarla(+$("#sd_m").value-kalanOf(id)); if(f){ hareketEkle({tur:"SAYIM",kres:l.kres,barkod:l.barkod,lotId:id,miktar:f,fiyat:l.fiyat,ack:$("#sd_a").value.trim()||"Lot sayım düzeltmesi"}); kaydet(); toast("Sayım farkı işlendi: "+(f>0?"+":"")+nf(f)); } sonra&&setTimeout(sonra); SAYFA[AKTIF_SEKME].goster&&SAYFA[AKTIF_SEKME].goster(); }}]);
   setTimeout(()=>$("#sd_m").select(),50);
 }
@@ -2054,13 +2067,13 @@ function urunDuzenle(kod, yeni){
   if(u.tanimsiz && /^❓/.test(u.ad)) u.ad="";
   const b=dlg(yeni?"Barkodsuz ürün (iç kod "+kod+")":"Ürün kartı",`<div class="fg">
     ${f("ad","Ürün adı *",u.ad)}${f("marka","Marka",u.marka)}<label class="f">Grup<select id="ue_grup"></select></label><label class="f">Birim<select id="ue_birim"></select></label>
-    ${f("net","Net miktar",u.net)}<label class="f">Saklama<select id="ue_saklama"></select></label>${f("uretici","Üretici",u.uretici)}${f("adres","Adres",u.adres)}${f("isletme","İşletme kayıt/onay",u.isletme)}${f("mensei","Menşei",u.mensei)}
+    ${f("net","Net miktar",u.net)}${f("koliAdet","Kolide kaç "+esc(u.birim||"adet")+" var",u.koliAdet,'type="number" min="0" step="1" placeholder="Örn. 12"')}${f("koliBarkod","Kolinin barkodu (varsa)",u.koliBarkod,'inputmode="numeric"')}<label class="f">Saklama<select id="ue_saklama"></select></label>${f("uretici","Üretici",u.uretici)}${f("adres","Adres",u.adres)}${f("isletme","İşletme kayıt/onay",u.isletme)}${f("mensei","Menşei",u.mensei)}
     <label class="f w2" style="grid-column:1/-1">İçindekiler<textarea id="ue_icerik" rows="3">${esc(u.icerik||"")}</textarea></label>${f("acilis","Açıldıktan sonra (gün)",u.acilis,'type="number" min="0"')}${f("min","Asgari stok",u.min,'type="number" min="0" step="any"')}</div>
     <div class="small muted" style="font-weight:600">Alerjenler</div><div class="chips al" id="ue_al">${ALERJENLER.map(a=>`<button data-a="${esc(a)}" class="${(u.alerjen||[]).includes(a)?"on":""}">${esc(a)}</button>`).join("")}</div>
     ${yeni?'<p class="hint">Bu iç kod (20… ile başlar) yalnızca kurum içinde geçerlidir. "Etiket Bas"tan barkodunu basıp ürünün kabına yapıştırabilirsiniz.</p>':""}`,
     [ ...(yeni||Object.values(V.lotlar).some(l=>l.barkod===kod)?[]:[{t:"Kartı sil",c:"danger",f:async()=>{ if(await onayla("Ürün kartı silinsin mi?","Sil")){ delete V.urunler[kod]; const sa=V.aktifSayim; if(sa){ for(const k of Object.keys(sa.sayilan)) if(sa.sayilan[k].barkod===kod) delete sa.sayilan[k]; if(SY.son&&SY.son.barkod===kod) SY.son=null; } kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(sa && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı silindi"); } }}]),
       {t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const ad=$("#ue_ad").value.trim(); if(!ad){ toast("Ürün adı gerekli",1); return false; }
-      V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),icerik:$("#ue_icerik").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
+      V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),icerik:$("#ue_icerik").value.trim(),koliAdet:$("#ue_koliAdet").value===""?null:+$("#ue_koliAdet").value,koliBarkod:$("#ue_koliBarkod").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
       kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(V.aktifSayim && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı kaydedildi"); }}], true);
   selDoldur($("#ue_grup",b),GRUPLAR,u.grup); selDoldur($("#ue_birim",b),BIRIMLER,u.birim); selDoldur($("#ue_saklama",b),Object.entries(SAKLAMA),u.saklama);
   $("#ue_al",b).onclick=e=>{ const x=e.target.closest("button"); if(x) x.classList.toggle("on"); };
@@ -2076,7 +2089,7 @@ SAYFA.etiket = {
   goster(){ this.lotlar(); this.alanlar(); this.on(); },
   alanlar(){ const t=$("#etTur").value; $("#etLotW").style.display=t==="urun"?"none":""; $("#etAcilisW").style.display=t==="acilis"?"":"none"; },
   lotlar(){ const u=this.u; if(!u){ $("#etLot").innerHTML=""; return; } const ls=fefoSirala(lotlarOf(u.barkod,aktifKres()).filter(l=>kalanOf(l.id)>0));
-    $("#etLot").innerHTML=ls.map(l=>`<option value="${l.id}">Lot ${esc(l.lot||"—")} · ${l.sktTur||"STT"} ${trTarih(l.skt)} · ${nf(kalanOf(l.id))} ${esc(u.birim)}</option>`).join("")||'<option value="">Bu kreşte stok yok</option>';
+    $("#etLot").innerHTML=ls.map(l=>`<option value="${l.id}">Lot ${esc(l.lot||"—")} · ${l.sktTur||"STT"} ${trTarih(l.skt)} · ${miktarYaz(u,kalanOf(l.id))}</option>`).join("")||'<option value="">Bu kreşte stok yok</option>';
     if(u.acilis!=null) $("#etGun").value=u.acilis; },
   async tekEtiket(){
     const u=this.u, t=$("#etTur").value; if(!u) return null; const l=V.lotlar[$("#etLot").value];

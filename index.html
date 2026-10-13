@@ -1955,7 +1955,7 @@ function sySonCiz(){
   const skt=syLotSkt(lotId); const sktFoto=(s.fotolar||{})[barkod+"|"+skt];
   const adim=(no,ok,baslik,ic)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:${ok?"#2e8f6f":"#9aa5a0"}">${ok?"✓":no}</div><div style="flex:1;min-width:0"><div style="font-weight:800">${baslik}</div>${ic}</div></div>`;
   e.innerHTML=`<div class="sonuc">
-    ${adim(1,true,"Barkod okundu",`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
+    ${adim(1,!u.tanimsiz,u.tanimsiz?"Ürünün adını yazın":"Barkod okundu",u.tanimsiz?`<div class="small" style="color:#b45309;font-weight:700">Bu barkod tanınmadı. Ad olmazsa sonradan hangi ürün olduğu bilinmez.</div><input id="syAdHizli" placeholder="Örn. Oba tel şehriye 5 kg" style="width:100%;font-size:17px;margin-top:4px"><div class="small muted">Yazıp klavyede Tamam'a basın.</div>`:`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
     ${adim(2,!!u.gorselId,"Ürünün resmi",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId?"Yeniden çek":"Ürünün resmini çek"}</button></div>`)}
     ${adim(3,!!skt,"STT / TETT",`<div style="margin-top:4px"><button class="btn ${skt?"sm":"gold"}" id="sySktFoto">📸 ${skt?"Tarihin resmini yeniden çek":"Tarihin resmini çek"}</button>${sktFoto?' <span class="small">resim kaydedildi ✓</span>':""}</div>
       <div class="small muted" id="sySktDur" style="margin-top:4px">${skt?"Seçili tarih: <b>"+trTarih(skt)+"</b>":"Resmi çekince tarih okunur. Okunamazsa aşağıdan seçin ya da yazın."}</div>
@@ -1969,6 +1969,7 @@ function sySonCiz(){
   gorselYukle(e);
   $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
   $("#syGorsel").onclick=async()=>{ if(await urunGorselDegistir(barkod,true)) sySonCiz(); };
+  const ah=$("#syAdHizli"); if(ah){ const kay=()=>{ const v=ah.value.trim(); if(!v) return; const uu=V.urunler[barkod]; if(!uu) return; uu.ad=v; uu.tanimsiz=false; kaydet(); urunListesiGuncelle(); syCiz(); toast("Ad kaydedildi"); }; ah.onchange=kay; ah.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); kay(); } }; }
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
   const ty=$("#syTarihYaz"); ty.oninput=()=>{ const d=ty.value.replace(/\D/g,""); let t=null; if(d.length===6) t=tarihGecerli(+d.slice(4,6),+d.slice(2,4),+d.slice(0,2)); else if(d.length===8) t=tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)); if(t){ syHedefSec(barkod,sySktAnahtar(barkod,t)); toast("Tarih: "+trTarih(t)); } };
   $("#sySktFoto").onclick=()=>sySktFoto(barkod);
@@ -2000,6 +2001,8 @@ function syTablo(){
 async function syBitir(){
   const s=V.aktifSayim; const r=sySatirlar(); const okut=r.filter(x=>x.okutuldu);
   if(!okut.length){ toast("Henüz hiçbir ürün okutulmadı",1); return; }
+  const adsiz=okut.filter(x=>x.u.tanimsiz);
+  if(adsiz.length && !await onayla(`<b>${adsiz.length} ürünün adı yok:</b><br>${adsiz.map(x=>esc(x.b)+(x.u.gorselId?" (resmi var)":" <b>(resmi de yok)</b>")).join("<br>")}<br><br>Ad ya da resim olmazsa bu ürünlerin ne olduğu sonradan bilinmez. Önce adlarını yazmanızı öneririm.`,"Yine de bitir")) return;
   const okutulmayan=r.filter(x=>!x.okutuldu);
   const ft=okut.reduce((t,x)=>t+(x.fiyat!=null?x.fark*x.fiyat:0),0);
   const b=dlg("Sayımı bitir",`<dl class="kv"><dt>Kreş</dt><dd>${esc(s.kres)}</dd><dt>Okutulan ürün</dt><dd>${okut.length}</dd><dt>Farklı çıkan</dt><dd>${okut.filter(x=>x.fark).length}</dd><dt>Fark tutarı</dt><dd class="${ft<0?"neg":""}">${tl(ft)}</dd></dl>

@@ -1003,7 +1003,7 @@ const ClaudeOkur = {
   async api(istem, blob, signal){ // telefon/laptop: kullanıcının kendi Claude anahtarıyla doğrudan
     const b64=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(",")[1]); fr.onerror=rej; fr.readAsDataURL(blob); });
     const y=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":this.anahtar,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:1500,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
+      body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
     const d=await y.json().catch(()=>({}));
     if(!y.ok){ const m=(d.error&&d.error.message)||("HTTP "+y.status); const e=new Error(y.status===401?"Anahtar geçersiz":(y.status===400&&/credit/i.test(m)?"Kredi bitmiş":m)); e.code=y.status===401?"anahtar":"api"; if(y.status===401) this.kapali=true; throw e; }
     const metin=(d.content||[]).map(c=>c.text||"").join(""); const a=metin.indexOf("{"), z=metin.lastIndexOf("}");
@@ -1825,6 +1825,25 @@ function syCiz(){
   $("#syBitir").onclick=syBitir;
   sySonCiz(); syTablo();
 }
+// Sayımda ürünün fotoğrafını Claude'a okut: ad, marka, firma, adres, içindekiler, alerjen, STT/TETT kendiliğinden yazılır
+async function syEtiketOku(barkod){
+  if(!(await ClaudeOkur.kullanilabilir())){
+    dlg("Claude okuyucu kapalı",`<p>${navigator.onLine?"Fotoğraftan ürün bilgisi okumak için Claude anahtarı gerekiyor.":"İnternet yok. Fotoğraftan okuma internet gelince çalışır."}</p>${navigator.onLine?'<p class="hint">Anahtarı <b>Yedekleme</b> sayfasındaki "Claude okuyucu" kutusuna bir kez yapıştırın.</p>':""}`,[{t:"Kapat"},...(navigator.onLine?[{t:"Yedekleme sayfasına git",c:"primary",f:()=>{ setTimeout(()=>sekme("yedek"),30); }}]:[])]); return; }
+  const f=await gorselSec(true); if(!f) return;
+  const d=$("#sySktDur"); const ilerle=(p,m)=>{ if(d&&m) d.textContent="⏳ "+m; };
+  try{
+    const {R,c}=await ClaudeOkur.urunFotoOku(f,ilerle); const u=V.urunler[barkod]; if(!u) return; const yaz=[];
+    if(R.ad && (u.tanimsiz||!u.ad)){ u.ad=R.ad; u.tanimsiz=false; yaz.push("ad"); }
+    const al=(k,v,et)=>{ if(v && !u[k]){ u[k]=v; yaz.push(et); } };
+    al("marka",R.marka,"marka"); al("net",R.net,"miktar"); al("uretici",R.uretici,"üretici"); al("adres",R.adres,"adres"); al("isletme",R.isletme,"işletme no"); al("mensei",R.mensei,"menşei"); al("icerik",R.icerik,"içindekiler");
+    if(R.saklama && (!u.saklama||u.saklama==="oda") && R.saklama!=="oda"){ u.saklama=R.saklama; yaz.push("saklama"); }
+    if(R.alerjen.length && !(u.alerjen||[]).length){ u.alerjen=R.alerjen; yaz.push("alerjen"); }
+    if(!u.gorselId){ try{ u.gorselId=await gorselKaydet(c); yaz.push("görsel"); }catch(_){} }
+    kaydet(); urunListesiGuncelle();
+    if(R.skt){ syHedefSec(barkod, sySktAnahtar(barkod,R.skt)); yaz.push("STT/TETT "+trTarih(R.skt)); } else syCiz();
+    const d2=$("#sySktDur"); if(d2) d2.innerHTML=yaz.length?"✅ Claude doldurdu: <b>"+esc(yaz.join(", "))+"</b>. Kontrol edin; yanlışsa ✎ Düzenle.":"Claude yeni bilgi bulamadı. Etiketi daha yakından çekin.";
+  }catch(e){ const d2=$("#sySktDur"); if(d2) d2.innerHTML='<span class="neg">Okunamadı: '+esc(e.message||e)+"</span>"; }
+}
 function sySonCiz(){
   const s=V.aktifSayim, e=$("#sySon"); if(!e) return; if(!SY.son){ e.innerHTML=""; return; }
   const {barkod,lotId}=SY.son, u=V.urunler[barkod]; if(!u){ e.innerHTML=""; return; } const k=syAnahtar(barkod,lotId); const x=s.sayilan[k];
@@ -1838,7 +1857,7 @@ function sySonCiz(){
     <div style="display:flex;gap:10px;align-items:flex-start"><img data-g="${esc(barkod)}" alt="" style="display:none;width:72px;height:72px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden">
       <div style="flex:1;min-width:0"><div class="small muted">Son okutulan</div><div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div>
       <div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>
-      <div class="inrow" style="gap:6px;margin-top:4px;flex-wrap:wrap">${u.tanimsiz?'<button class="btn sm primary" id="syAdYaz">✎ Adını yaz</button>':'<button class="btn sm" id="syAdYaz">✎ Düzenle</button>'}<button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button>${u.gorselId?"":'<button class="btn sm" id="syGorsel">📷 Ürün görseli çek</button>'}</div></div></div>
+      <div class="inrow" style="gap:6px;margin-top:4px;flex-wrap:wrap">${u.tanimsiz?'<button class="btn sm primary" id="syAdYaz">✎ Adını yaz</button>':'<button class="btn sm" id="syAdYaz">✎ Düzenle</button>'}<button class="btn sm gold" id="syEtiket">📸 Etiketi okut, bilgileri doldur</button><button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button>${u.gorselId?"":'<button class="btn sm" id="syGorsel">📷 Ürün görseli çek</button>'}</div></div></div>
     <div class="small" style="font-weight:700;margin-top:10px">Bu ürünün STT / TETT'si hangisi?</div>
     <div class="skt-chips">${[...sec].map(([id,skt])=>chip(id,(skt?trTarih(skt):"tarihsiz")+(id.startsWith("yeni:")?" (yeni)":""))).join("")}${chip(null,"Tarih bilinmiyor")}</div>
     <div class="inrow" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="sySktYeni" style="max-width:170px"><button class="btn sm" id="sySktEkle">+ Yeni tarih ekle</button><button class="btn sm gold" id="sySktFoto">📸 Tarihin fotoğrafı</button></div>
@@ -1847,7 +1866,7 @@ function sySonCiz(){
     ${u.koliAdet>1?`<div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><button class="btn sm" id="syKoliEksi">−1 koli</button><button class="btn sm primary" id="syKoliArti">+1 koli (${nf(u.koliAdet)} ${esc(u.birim)})</button><span class="small muted">${x&&koliMetin(u,x.miktar)?esc(koliMetin(u,x.miktar)):""}</span></div>`:`<div class="small muted" style="margin-top:6px">Koli ile saymak için <a href="#" id="syKoliTanim">kolide kaç ${esc(u.birim)} olduğunu yazın</a>.</div>`}
     <div class="small muted" style="margin-top:4px">${lotId?"Bu tarihte sayılan":"Tarihsiz sayılan"} · Sistemde toplam: ${miktarYaz(u,stokOf(barkod,s.kres))} · Sayılan toplam: ${nf(syUrunSayilan(s,barkod))}</div></div>`;
   gorselYukle(e);
-  $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
+  $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
   const g=$("#syGorsel"); if(g) g.onclick=async()=>{ if(await urunGorselDegistir(barkod,true)) sySonCiz(); };
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
   $("#sySktEkle").onclick=()=>{ const t=$("#sySktYeni").value; if(!t){ toast("Önce tarihi seçin",1); return; } syHedefSec(barkod,sySktAnahtar(barkod,t)); };

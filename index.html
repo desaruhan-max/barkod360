@@ -1797,7 +1797,10 @@ function syBarkod(a){
   if(!a.foto && SY.sonOkuma && SY.sonOkuma.kod===kod && simdi-SY.sonOkuma.t<4000){ SY.sonOkuma.t=simdi; return; }
   SY.sonOkuma={kod,t:simdi};
   let u=urunBul(a.gtin); if(!u && a.tartili) u=urunBul(a.tartili.kod);
-  if(!u){ bip(); syYeniUrun(a); return; }
+  if(!u){ const b=syBenzer(a.gtin);
+    if(b){ dlg("Barkod yanlış okunmuş olabilir",`<p>Okunan barkod <b>${esc(a.gtin)}</b> kayıtlı değil, ama <b>${esc(b.barkod)}</b> (<b>${esc(b.ad)}</b>) barkoduna çok benziyor. Kamera bir iki rakamı yanlış okumuş olabilir.</p><p>Okuttuğunuz ürün bu mu?</p>`,
+        [{t:"Hayır, yeni ürün",f:()=>{ setTimeout(()=>syYeniUrun(a),30); }},{t:"Evet, "+b.ad,c:"primary",f:()=>{ setTimeout(()=>syBarkod(Object.assign({},a,{gtin:b.barkod,foto:true})),30); }}]); return; }
+    bip(); syYeniUrun(a); return; }
   let lotId=null; if(a.lot){ const l=lotlarOf(u.barkod,s.kres).find(x=>(x.lot||"")===a.lot && (!a.skt||x.skt===a.skt)); if(l) lotId=l.id; }
   if(!lotId && a.skt) lotId=sySktAnahtar(u.barkod,a.skt);
   if(!lotId) lotId=syVarsayilanHedef(u.barkod);
@@ -1880,6 +1883,10 @@ async function sySktFoto(barkod){
   if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); syHedefSec(barkod,sySktAnahtar(barkod,skt)); bip(); yaz("✅ STT/TETT: <b>"+trTarih(skt)+"</b>"+(ut?" · Üretim: <b>"+trTarih(ut)+"</b>":"")+". Yanlışsa doğru tarihe dokunun ya da yazın."); }
   else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz((gecmis?"Okunan tarih <b>"+trTarih(gecmis)+"</b> çok eski, yanlış okunmuş olabilir. ":ut?"Yalnız <b>üretim tarihi ("+trTarih(ut)+")</b> okunabildi, STT/TETT okunamadı. ":"Resim kaydedildi ama tarih okunamadı. ")+"STT/TETT'yi yazın (örn. 190127) ya da tarihe dokunun. İsterseniz yalnız STT/TETT yazan yeri yakından çekin."); SY.bekleyenFoto={barkod,fotoId}; }
 }
+// kayıtlı bir barkoda 1-2 rakam farkla benzeyen okuma: kamera yanlış okumuş olabilir
+function syBenzer(kod){ if(!kod) return null; let en=null, ef=9;
+  for(const b in V.urunler){ const u=V.urunler[b]; if(u.tanimsiz||b.length!==kod.length) continue; let f=0; for(let i=0;i<b.length&&f<=2;i++) if(b[i]!==kod[i]) f++; if(f<=2&&f<ef){ ef=f; en=u; } }
+  return en; }
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;
   V.urunler[kod]={barkod:kod, ad:"❓ Adı girilmemiş ürün · "+kod, tanimsiz:true, marka:"", grup:GRUPLAR[0], birim:a.tartili?"kg":"adet", saklama:"oda", alerjen:[], olusturma:new Date().toISOString(), son:{}};

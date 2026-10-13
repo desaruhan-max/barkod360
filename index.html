@@ -1422,7 +1422,7 @@ async function kbInternettenBul(kod){
     const j=await r.json(); const p=j&&j.status===1&&j.product;
     if(!p){ not.innerHTML="<span>🌐 Bu barkod internetteki ürün listesinde yok. Bilgileri ambalajın fotoğrafından alın (bir kez kaydedilir).</span>"; return; }
     const ad=(p.product_name_tr||p.product_name||p.generic_name_tr||"").trim(); const marka=(p.brands||"").split(",")[0].trim();
-    const icerik=(p.ingredients_text_tr||p.ingredients_text||"").replace(/_/g,"").trim();
+    const icerik=(p.ingredients_text_tr||p.ingredients_text||"").replace(/[_*]/g,"").trim();
     const al=[...(p.allergens_tags||[])].map(x=>OFF_ALERJEN[x]).filter(Boolean);
     const dolan=[]; if(kbAlanYaz("u_ad",ad)) dolan.push("ad"); if(kbAlanYaz("u_marka",marka)) dolan.push("marka"); if(kbAlanYaz("u_net",(p.quantity||"").trim())) dolan.push("miktar"); if(kbAlanYaz("u_icerik",icerik)) dolan.push("içindekiler");
     if(al.length){ const sec=new Set([...kbAlerjenler(),...al]); kbAlerjenCiz([...sec]); dolan.push("alerjen"); }

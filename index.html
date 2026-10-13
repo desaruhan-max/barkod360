@@ -1344,8 +1344,9 @@ async function kbBarkod(a){
     else { const m=$("#l_miktar"); m.value=yuvarla((+m.value||0)+(a.tartili?a.tartili.kg:1)); m.classList.add("okundu"); setTimeout(()=>m.classList.remove("okundu"),500); toast("Miktar: "+m.value+" "+$("#u_birim").value); return; }
   }
   if(KB.barkod && KB.kirli){
-    if(kbGecerliMi() && $("#l_skt").value){ const ok=await kbKaydet(true); if(!ok) return; }
-    else { const ok=await onayla("Önceki ürün ("+esc($("#u_ad").value||KB.barkod)+") kaydedilmedi. Kaydetmeden yeni ürüne geçilsin mi?","Kaydetmeden geç"); if(!ok) return; }
+    const eskiAd=$("#u_ad").value||KB.barkod; let ok=false;
+    if(kbGecerliMi() && $("#l_skt").value){ try{ ok=await kbKaydet(true); }catch(_){ ok=false; } }
+    if(!ok) toast("Önceki ürün ("+eskiAd+") kaydedilmeden bırakıldı, yeni ürüne geçildi",1);
   }
   kbSifirla(); KB.analiz=a; KB.barkod=kod; KB.kirli=true;
   $("#u_barkod").value=kod;

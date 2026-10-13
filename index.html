@@ -1351,6 +1351,7 @@ async function kbBarkod(a){
   }
   kbSifirla(); KB.analiz=a; KB.barkod=kod; KB.kirli=true;
   $("#u_barkod").value=kod;
+  if(u && u.tanimsiz){ kbUrunDoldur(u); $("#u_ad").value=""; u=null; } // sayımda adsız açılmış kart: tamamlansın
   if(u){ KB.urunVar=true; kbUrunDoldur(u); kbUrunGoster(true);
     const s=u.son||{}; if(s.ted) $("#l_ted").value=s.ted; if(s.fiyat!=null) $("#l_fiyat").value=s.fiyat; if(s.sktTur) $("#l_tur").value=s.sktTur;
   } else { KB.urunVar=false; kbUrunGoster(false); if(a.ulke==="Türkiye") $("#u_mensei").value="Türkiye"; setTimeout(()=>$("#u_ad").focus(),50); }
@@ -1412,6 +1413,15 @@ async function kbOcrCalistir(kutu){
 }
 // İnternet açıksa ürünü açık ürün veritabanında (Open Food Facts) ara: ad, marka, miktar, içindekiler, alerjen
 const OFF_ALERJEN={"en:gluten":"Gluten","en:crustaceans":"Kabuklular","en:eggs":"Yumurta","en:fish":"Balık","en:peanuts":"Yer fıstığı","en:soybeans":"Soya","en:milk":"Süt (laktoz)","en:nuts":"Sert kabuklu meyveler","en:celery":"Kereviz","en:mustard":"Hardal","en:sesame-seeds":"Susam","en:sulphur-dioxide-and-sulphites":"Sülfit","en:lupin":"Acı bakla","en:molluscs":"Yumuşakçalar"};
+async function offBul(kod, ms){
+  if(!kod || !navigator.onLine || !/^\d{8,14}$/.test(kod)) return null;
+  const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),ms||8000);
+  try{ const j=await fetch("https://world.openfoodfacts.org/api/v2/product/"+kod+".json?fields=product_name_tr,product_name,generic_name_tr,brands,quantity,ingredients_text_tr,ingredients_text,allergens_tags",{signal:ctl.signal}).then(r=>r.json());
+    const p=j&&j.status===1&&j.product; if(!p) return {yok:true};
+    return {ad:(p.product_name_tr||p.product_name||p.generic_name_tr||"").trim(), marka:(p.brands||"").split(",")[0].trim(), net:(p.quantity||"").trim(),
+      icerik:(p.ingredients_text_tr||p.ingredients_text||"").replace(/[_*]/g,"").trim(), alerjen:(p.allergens_tags||[]).map(x=>OFF_ALERJEN[x]).filter(Boolean)};
+  } finally{ clearTimeout(t); }
+}
 async function kbInternettenBul(kod){
   if(!kod || !navigator.onLine || !/^\d{8,14}$/.test(kod)) return;
   const b=$("#kbUyari"); const not=document.createElement("div"); not.className="banner"; not.innerHTML="<span>🌐 Ürün bilgisi internetten aranıyor…</span>"; b&&b.prepend(not);
@@ -1487,7 +1497,7 @@ async function kbKaydet(sessiz){
   const u=Object.assign({}, eski, {barkod, ad, marka:$("#u_marka").value.trim(), grup:$("#u_grup").value, birim:$("#u_birim").value, net:$("#u_net").value.trim(), saklama:$("#u_saklama").value,
     icerik:$("#u_icerik").value.trim(), uretici:$("#u_uretici").value.trim(), adres:$("#u_adres").value.trim(), isletme:$("#u_isletme").value.trim(), mensei:$("#u_mensei").value.trim(),
     acilis:$("#u_acilis").value===""?null:+$("#u_acilis").value, min:$("#u_min").value===""?null:+$("#u_min").value, alerjen:kbAlerjenler(),
-    tartili:(KB.analiz&&KB.analiz.tartili)?true:(eski.tartili||false), olusturma:eski.olusturma||new Date().toISOString()});
+    tanimsiz:false, tartili:(KB.analiz&&KB.analiz.tartili)?true:(eski.tartili||false), olusturma:eski.olusturma||new Date().toISOString()});
   const fiyat=$("#l_fiyat").value===""?null:+$("#l_fiyat").value;
   u.son={ted:$("#l_ted").value, fiyat, sktTur:$("#l_tur").value};
   let fotoId=null; if(KB.foto){ try{ fotoId=await fotoKaydet(KB.foto); }catch(e){} }
@@ -1626,7 +1636,7 @@ function syUrunSayilan(s, barkod){ let t=0; for(const k in s.sayilan){ if(s.sayi
 function syBarkod(a){
   const s=V.aktifSayim; if(!s) return;
   let u=urunBul(a.gtin); if(!u && a.tartili) u=urunBul(a.tartili.kod);
-  if(!u){ bip(false); syYeniUrun(a); return; }
+  if(!u){ bip(); syYeniUrun(a); return; }
   let lotId=null; if(a.lot){ const l=lotlarOf(u.barkod,s.kres).find(x=>(x.lot||"")===a.lot && (!a.skt||x.skt===a.skt)); if(l) lotId=l.id; }
   const art=a.tartili?a.tartili.kg:(a.adetAI||1);
   syEkle(u.barkod, lotId, art);
@@ -1638,15 +1648,15 @@ function syEkle(barkod, lotId, art){
   s.log.push({t:new Date().toISOString(),barkod,lotId,art});
   SY.son={barkod,lotId}; kaydet(); syCiz();
 }
-function syYeniUrun(a){
+function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;
-  const b=dlg("Kayıtlı olmayan barkod: "+kod,`<p class="hint">Sayımda bulunan ama sistemde kartı olmayan ürün. Kısa kart açıp sayıma ekleyin. Kartın geri kalanı sonra doldurulabilir.</p>
-    <div class="fg"><label class="f w2">Ürün adı *<input id="yu_ad"></label><label class="f">Marka<input id="yu_marka"></label>
-    <label class="f">Grup<select id="yu_grup"></select></label><label class="f">Birim<select id="yu_birim"></select></label><label class="f">Birim fiyat (₺)<input id="yu_fiyat" type="number" step="any"></label></div>`,
-    [{t:"Vazgeç"},{t:"Kaydet ve say",c:"primary",f:()=>{ const ad=$("#yu_ad").value.trim(); if(!ad){ toast("Ürün adı gerekli",1); return false; }
-      V.urunler[kod]={barkod:kod, ad, marka:$("#yu_marka").value.trim(), grup:$("#yu_grup").value, birim:$("#yu_birim").value, saklama:"oda", alerjen:[], olusturma:new Date().toISOString(), son:{fiyat:$("#yu_fiyat").value===""?null:+$("#yu_fiyat").value}};
-      urunListesiGuncelle(); syEkle(kod,null,a.tartili?a.tartili.kg:1); }}]);
-  selDoldur($("#yu_grup",b),GRUPLAR); selDoldur($("#yu_birim",b),BIRIMLER,"adet"); setTimeout(()=>$("#yu_ad").focus(),50);
+  V.urunler[kod]={barkod:kod, ad:"❓ Adı girilmemiş ürün · "+kod, tanimsiz:true, marka:"", grup:GRUPLAR[0], birim:a.tartili?"kg":"adet", saklama:"oda", alerjen:[], olusturma:new Date().toISOString(), son:{}};
+  urunListesiGuncelle(); syEkle(kod,null,a.tartili?a.tartili.kg:1);
+  toast("Yeni barkod sayıldı. Adı internetten aranıyor…");
+  offBul(kod).then(r=>{ const u=V.urunler[kod]; if(!u||!u.tanimsiz) return;
+    if(r && r.ad){ Object.assign(u,{ad:r.ad, marka:r.marka||u.marka, net:r.net||u.net, icerik:r.icerik||u.icerik, alerjen:r.alerjen.length?r.alerjen:u.alerjen, tanimsiz:false}); kaydet(); urunListesiGuncelle(); syCiz(); toast("Bulundu: "+r.ad); }
+    else toast("Bu ürünün adı bulunamadı. Sayıma devam edin, adı sonra Ürünler sayfasından yazılır.",1);
+  }).catch(()=>toast("İnternet yok. Ürün sayıldı, adı sonra yazılır.",1));
 }
 function sySatirlar(){
   const s=V.aktifSayim; const bk=new Set();

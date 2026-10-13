@@ -1124,6 +1124,8 @@ class Kamera{
     // 2 kat yakınlaştırma: telefonu 15-20 cm uzakta tutunca barkod net ve büyük görünür
     if(c.zoom&&c.zoom.max>=1.5){ adv.zoom=Math.min(2,c.zoom.max); }
     if(Object.keys(adv).length) tr.applyConstraints({advanced:[adv]}).catch(()=>{});
+    const st=(tr.getSettings&&tr.getSettings())||{}; this.bilgi=(tr.label||"kamera").slice(0,28)+" · "+(st.width||"?")+"×"+(st.height||"?")+" · odak:"+(c.focusMode?c.focusMode.join("/"):"yok")+" · zoom:"+(adv.zoom||1);
+    setTimeout(()=>this.durum("Barkodu çerçeveye tutun · "+this.bilgi),400);
     let bar=$(".kAyar",this.kap); if(!bar){ bar=document.createElement("div"); bar.className="cam-bar kAyar"; $(".canli",this.kap).insertBefore(bar,$(".canli .cam-bar",this.kap).nextSibling); }
     bar.innerHTML=(c.zoom&&c.zoom.max>1?`<label class="small" style="flex:1;display:flex;align-items:center;gap:6px">🔍<input type="range" class="kZoom" min="${c.zoom.min||1}" max="${Math.min(c.zoom.max,5)}" step="0.1" value="${adv.zoom||1}" style="flex:1"></label>`:"")+(c.torch?`<button class="btn sm kFener">🔦 Işık</button>`:"")+`<span class="small muted" style="width:100%">Netleşmezse ekrana dokunun · telefonu 15–20 cm uzakta tutun</span>`;
     const z=$(".kZoom",bar); if(z) z.oninput=()=>tr.applyConstraints({advanced:[{zoom:+z.value}]}).catch(()=>{});

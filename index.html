@@ -1872,7 +1872,12 @@ async function sySktFoto(barkod){
   try{ const bm=await createImageBitmap(f); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); fotoId=await fotoKaydet(c); }catch(e){ yaz("Resim açılamadı: "+esc(e.message||e)); return; }
   let skt="", ut="";
   try{
-    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=R.skt||""; ut=R.ut||""; }
+    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=R.skt||""; ut=R.ut||"";
+      // tarih yazan yerde ürünün adı/çeşidi de yazıyorsa ürün kartındaki boşlukları doldur
+      const u=V.urunler[barkod]; if(u){ let deg=false; const yeniAd=R.ad&&(u.tanimsiz||!u.ad||(!u.uretici&&R.ad.length>u.ad.length)); if(yeniAd){ u.ad=R.ad; u.tanimsiz=false; deg=true; }
+        for(const [k,v] of [["marka",R.marka],["net",R.net],["uretici",R.uretici],["adres",R.adres],["isletme",R.isletme],["icerik",R.icerik]]) if(v&&!u[k]){ u[k]=v; deg=true; }
+        if(R.alerjen&&R.alerjen.length&&!(u.alerjen||[]).length){ u.alerjen=R.alerjen; deg=true; }
+        if(deg){ kaydet(); urunListesiGuncelle(); } } }
     if(!skt){ const tm=await TarihMotoru.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=tm&&tm.R&&tm.R.skt||""; ut=ut||(tm&&tm.R&&tm.R.ut)||""; }
   }catch(e){ console.warn(e); }
   if(skt && ut && skt<=ut) skt=""; // üretim tarihi STT sanılmasın

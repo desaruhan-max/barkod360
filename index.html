@@ -333,6 +333,7 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
             <label class="f">Menşei<input id="u_mensei" placeholder="Türkiye"></label>
             <label class="f">Açıldıktan sonra (gün)<input id="u_acilis" type="number" min="0" step="1" placeholder="Örn. 3"></label>
             <label class="f">Asgari stok<input id="u_min" type="number" min="0" step="any"></label>
+            <label class="f w2" style="grid-column:1/-1">İçindekiler<textarea id="u_icerik" rows="3" placeholder="Ambalajdaki içindekiler listesi"></textarea></label>
             <div class="f w2" style="grid-column:1/-1"><span class="small muted" style="font-weight:600">Alerjenler (TGK Ek-1)</span><div class="chips al" id="u_alerjen"></div></div>
           </div>
         </fieldset>
@@ -1244,7 +1245,7 @@ SAYFA.konsol = { goster(){
 
 /* ================== MAL KABUL ================== */
 const KB = {otoNo:0, kam:null, analiz:null, barkod:"", urunVar:false, foto:null, kirli:false, ocrAlan:new Set(), kullaniciAlan:new Set(), ocrSayac:0};
-const KB_URUN = ["barkod","ad","marka","grup","birim","net","saklama","uretici","adres","isletme","mensei","acilis","min"];
+const KB_URUN = ["barkod","ad","marka","grup","birim","net","saklama","uretici","adres","isletme","mensei","acilis","min","icerik"];
 function kbAlerjenCiz(sec){ $("#u_alerjen").innerHTML=ALERJENLER.map(a=>`<button type="button" data-a="${esc(a)}" class="${(sec||[]).includes(a)?"on":""}">${esc(a)}</button>`).join(""); }
 function kbAlerjenler(){ return $$("#u_alerjen button.on").map(b=>b.dataset.a); }
 function kbSifirla(){
@@ -1360,6 +1361,7 @@ async function kbBarkod(a){
   const uy=[]; if(a.gecerli===false) uy.push("Barkodun kontrol hanesi tutmuyor. Yanlış okunmuş olabilir, tekrar okutun.");
   if(!u) uy.push("Yeni ürün. Üretici ve adres yazan yüzün de fotoğrafını çekin"+(ARTIFACT?"":" (ya da kameraya tutup <b>Boşluk</b>a basın)")+": marka, üretici ve adres yazıdan alınır. Bir kez kaydedilir, sonraki teslimatlarda kendiliğinden gelir.");
   $("#kbUyari").innerHTML=uy.map(x=>`<div class="banner"><span>${x}</span></div>`).join("");
+  if(!u) kbInternettenBul(kod);
   if(!$("#l_skt").value && KB.kam && KB.kam.akis) kbOtoTarih(); else kbAdim2();
 }
 /* ---- fotoğraf ve yazı okuma ---- */
@@ -1407,6 +1409,26 @@ async function kbOcrCalistir(kutu){
     kbOcrUygula(R, !!kutu);
     if(dur) dur.textContent="Cihazdaki okuyucu kullanıldı ("+(KB.claudeHata||"")+"). "+(kutu?"Seçili alan okundu.":"Bir alan eksikse fotoğrafta o kısmı çerçeveleyin ya da elle yazın.");
   }catch(e){ console.error(e); if(dur) dur.innerHTML='<span class="neg">Yazı okunamadı: '+esc(e.message||e)+'</span>'; }
+}
+// İnternet açıksa ürünü açık ürün veritabanında (Open Food Facts) ara: ad, marka, miktar, içindekiler, alerjen
+const OFF_ALERJEN={"en:gluten":"Gluten","en:crustaceans":"Kabuklular","en:eggs":"Yumurta","en:fish":"Balık","en:peanuts":"Yer fıstığı","en:soybeans":"Soya","en:milk":"Süt (laktoz)","en:nuts":"Sert kabuklu meyveler","en:celery":"Kereviz","en:mustard":"Hardal","en:sesame-seeds":"Susam","en:sulphur-dioxide-and-sulphites":"Sülfit","en:lupin":"Acı bakla","en:molluscs":"Yumuşakçalar"};
+async function kbInternettenBul(kod){
+  if(!kod || !navigator.onLine || !/^\d{8,14}$/.test(kod)) return;
+  const b=$("#kbUyari"); const not=document.createElement("div"); not.className="banner"; not.innerHTML="<span>🌐 Ürün bilgisi internetten aranıyor…</span>"; b&&b.prepend(not);
+  try{
+    const ctl=new AbortController(); const t=setTimeout(()=>ctl.abort(),8000);
+    const r=await fetch("https://world.openfoodfacts.org/api/v2/product/"+kod+".json?fields=product_name_tr,product_name,generic_name_tr,brands,quantity,ingredients_text_tr,ingredients_text,allergens_tags,traces_tags,countries_tags,manufacturing_places,origins",{signal:ctl.signal});
+    clearTimeout(t); if(KB.barkod!==kod) { not.remove(); return; }
+    const j=await r.json(); const p=j&&j.status===1&&j.product;
+    if(!p){ not.innerHTML="<span>🌐 Bu barkod internetteki ürün listesinde yok. Bilgileri ambalajın fotoğrafından alın (bir kez kaydedilir).</span>"; return; }
+    const ad=(p.product_name_tr||p.product_name||p.generic_name_tr||"").trim(); const marka=(p.brands||"").split(",")[0].trim();
+    const icerik=(p.ingredients_text_tr||p.ingredients_text||"").replace(/_/g,"").trim();
+    const al=[...(p.allergens_tags||[])].map(x=>OFF_ALERJEN[x]).filter(Boolean);
+    const dolan=[]; if(kbAlanYaz("u_ad",ad)) dolan.push("ad"); if(kbAlanYaz("u_marka",marka)) dolan.push("marka"); if(kbAlanYaz("u_net",(p.quantity||"").trim())) dolan.push("miktar"); if(kbAlanYaz("u_icerik",icerik)) dolan.push("içindekiler");
+    if(al.length){ const sec=new Set([...kbAlerjenler(),...al]); kbAlerjenCiz([...sec]); dolan.push("alerjen"); }
+    if(!$("#u_mensei").value && (p.countries_tags||[]).includes("en:turkey") && (p.manufacturing_places||"").match(/türk|turk/i)) $("#u_mensei").value="Türkiye";
+    not.innerHTML=dolan.length?"<span>🌐 İnternetten dolduruldu: <b>"+dolan.join(", ")+"</b>. Ambalajla karşılaştırıp kontrol edin.</span>":"<span>🌐 İnternetteki kayıtta yeni bilgi yok.</span>";
+  }catch(e){ not.innerHTML="<span>🌐 İnternetten bilgi alınamadı (bağlantı yok). Ambalaj fotoğrafından devam edin.</span>"; }
 }
 function kbAlanYaz(id, deger, supheli, zorla){
   const e=$("#"+id); if(!e||deger==null||deger==="") return false;
@@ -1463,7 +1485,7 @@ async function kbKaydet(sessiz){
   // ürün kartı
   const eski=V.urunler[barkod]||{};
   const u=Object.assign({}, eski, {barkod, ad, marka:$("#u_marka").value.trim(), grup:$("#u_grup").value, birim:$("#u_birim").value, net:$("#u_net").value.trim(), saklama:$("#u_saklama").value,
-    uretici:$("#u_uretici").value.trim(), adres:$("#u_adres").value.trim(), isletme:$("#u_isletme").value.trim(), mensei:$("#u_mensei").value.trim(),
+    icerik:$("#u_icerik").value.trim(), uretici:$("#u_uretici").value.trim(), adres:$("#u_adres").value.trim(), isletme:$("#u_isletme").value.trim(), mensei:$("#u_mensei").value.trim(),
     acilis:$("#u_acilis").value===""?null:+$("#u_acilis").value, min:$("#u_min").value===""?null:+$("#u_min").value, alerjen:kbAlerjenler(),
     tartili:(KB.analiz&&KB.analiz.tartili)?true:(eski.tartili||false), olusturma:eski.olusturma||new Date().toISOString()});
   const fiyat=$("#l_fiyat").value===""?null:+$("#l_fiyat").value;

@@ -513,6 +513,13 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
 <!-- ============ YEDEK ============ -->
 <section class="tab" id="tab-yedek">
   <div class="sec-h"><h2>Yedekleme</h2></div>
+  <div class="card" id="ghKart">
+    <h3>📶 Telefon ↔ Laptop eşitleme</h3>
+    <p class="hint">Telefonda ve laptopta aynı bilgileri girin. Kayıtlar sizin <b>özel</b> GitHub deponuzda tutulur; internet yokken telefonda bekler, internet gelince gönderilir.</p>
+    <div class="fg"><label class="f">Depo<input id="ghRepo" placeholder="desaruhan-max/barkod360-veri"></label><label class="f w2">Anahtar (token)<input id="ghToken" type="password" autocomplete="off" placeholder="github_pat_..."></label></div>
+    <div class="inrow" style="gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn primary" id="ghBagla">Bağlan</button><button class="btn" id="ghSimdi">Şimdi eşitle</button><button class="btn danger" id="ghKes">Bağlantıyı kes</button></div>
+    <p class="small" id="ghDurum"></p>
+  </div>
   <div class="card" id="ckKart">
     <h3>🤖 Claude okuyucu (ürün bilgisini fotoğraftan okur)</h3>
     <p class="hint">Claude anahtarınızı buraya yapıştırın. Anahtar yalnız bu cihazda saklanır, yedek dosyasına ve başka yere gitmez. Telefonda ve laptopta ayrı ayrı bir kez girilir.</p>
@@ -672,13 +679,13 @@ async function senkCalis(){
 }
 async function fotoYukle(){
   if(!SENK.assets) return;
-  const isle=async(ent, alan)=>{ const ids=(alan==="fotoIds"?ent.fotoIds:(ent.fotoId?[ent.fotoId]:[]))||[]; ent.fotoAsset=ent.fotoAsset||{}; let deg=false;
+  const isle=async(ent, alan)=>{ const ids=(alan==="fotoIds"?ent.fotoIds:(ent[alan]?[ent[alan]]:[]))||[]; ent.fotoAsset=ent.fotoAsset||{}; let deg=false;
     for(const id of ids){ if(ent.fotoAsset[id]) continue; const d=await DB.al("foto:"+id); if(!d) continue;
       const blob=await (await fetch(d)).blob(); const r=await zamanAsimi(SENK.assets.upload(blob),60000); ent.fotoAsset[id]=r.id; deg=true; }
     return deg; };
   let deg=false;
   for(const l of Object.values(V.lotlar)) if((l.fotoIds||[]).length && (await isle(l,"fotoIds"))) deg=true;
-  for(const u of Object.values(V.urunler)) if(u.fotoId && (await isle(u,"fotoId"))) deg=true;
+  for(const u of Object.values(V.urunler)){ if(u.fotoId && (await isle(u,"fotoId"))) deg=true; if(u.gorselId && (await isle(u,"gorselId"))) deg=true; }
   if(deg){ senkFark(); }
 }
 function bekleyenSayisi(){ let n=0; for(const kid in SENK.kirli){ const g=SENK.gonderildi[kid]||0; const k=SENK.kova[kid]||{}; for(const x in k) if(k[x].ts>=g) n++; } return n; }
@@ -688,13 +695,52 @@ function senkGoster(){
   const n=Object.keys(SENK.kirli).length?bekleyenSayisi():0;
   if(n){ e.className="senk bekle"; e.textContent=(SENK.durum==="cevrimdisi"||!navigator.onLine?"İnternet yok · ":"Gönderiliyor · ")+n+" kayıt bekliyor"; }
   else if(SENK.durum==="dolu"){ e.className="senk hata"; e.textContent="Ortak depo dolu"; }
+  else if(SENK.durum==="yetki"){ e.className="senk hata"; e.textContent="Eşitleme anahtarı geçersiz"; }
   else { e.className="senk ok"; e.textContent="Eşitlendi"+(SENK.son?" · "+SENK.son:""); }
+}
+/* ===== GitHub özel deposu üzerinden eşitleme (telefon uygulaması / laptop) =====
+   Kayıtlar kullanıcının kendi ÖZEL GitHub deposunda tutulur: kayit/<kova>.json ve foto/<id>.jpg
+   Anahtar (token) yalnız bu cihazda saklanır. */
+const GH = { ayar:null, sha:{}, okunan:{}, zam:null,
+  async ayarAl(){ try{ this.ayar=(await DB.al("ghAyar"))||null; this.okunan=(await DB.al("ghOkunan"))||{}; this.sha=(await DB.al("ghSha"))||{}; }catch(e){ this.ayar=null; } return this.ayar; },
+  h(raw){ return {"Authorization":"Bearer "+this.ayar.token,"Accept":raw?"application/vnd.github.raw+json":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"}; },
+  url(p){ return "https://api.github.com/repos/"+this.ayar.repo+"/contents/"+p; },
+  b64(str){ const b=new TextEncoder().encode(str); let s=""; for(let i=0;i<b.length;i+=0x8000) s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000)); return btoa(s); },
+  async b64blob(blob){ const d=await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob); }); return String(d).split(",")[1]; },
+  async yaz(path, b64){
+    for(let i=0;i<3;i++){ const body={message:"BARKOD360 "+path, content:b64}; if(this.sha[path]) body.sha=this.sha[path];
+      const r=await fetch(this.url(path),{method:"PUT",headers:this.h(),body:JSON.stringify(body)});
+      if(r.ok){ const j=await r.json(); this.sha[path]=j.content.sha; DB.yaz("ghSha",this.sha).catch(()=>{}); return j; }
+      if(r.status===409||r.status===422){ const g=await fetch(this.url(path)+"?t="+Date.now(),{headers:this.h(),cache:"no-store"}); if(g.ok){ this.sha[path]=(await g.json()).sha; continue; } if(g.status===404){ delete this.sha[path]; continue; } }
+      const e=new Error("GitHub "+r.status); e.code=r.status===401||r.status===403?"yetki":"ag"; throw e; }
+    throw new Error("GitHub yazılamadı"); },
+  async liste(dir){ const r=await fetch(this.url(dir)+"?t="+Date.now(),{headers:this.h(),cache:"no-store"}); if(r.status===404) return []; if(!r.ok){ const e=new Error("GitHub "+r.status); e.code=r.status===401||r.status===403?"yetki":"ag"; throw e; } return r.json(); },
+  async oku(path){ const r=await fetch(this.url(path)+"?t="+Date.now(),{headers:this.h(true),cache:"no-store"}); if(!r.ok) throw new Error("GitHub "+r.status); return r; },
+  async dene(repo, token){ const r=await fetch("https://api.github.com/repos/"+repo,{headers:{"Authorization":"Bearer "+token,"Accept":"application/vnd.github+json"}}); if(r.status===404) throw new Error("Depo bulunamadı ya da anahtarın bu depoya izni yok"); if(r.status===401) throw new Error("Anahtar geçersiz"); if(!r.ok) throw new Error("GitHub "+r.status); const j=await r.json(); if(!j.private) throw new Error("Bu depo herkese açık. Veriler için ÖZEL (private) depo gerekli."); if(j.permissions && !j.permissions.push) throw new Error("Anahtarın yazma izni yok (Contents: Read and write)"); return j; },
+  async cek(){
+    if(!this.ayar || !navigator.onLine) return;
+    const l=await this.liste("kayit"); const yeni=[];
+    for(const f of l){ if(f.type!=="file"||!/\.json$/.test(f.name)) continue; if(this.okunan[f.name]===f.sha) continue;
+      try{ const r=await this.oku("kayit/"+f.name); yeni.push(await r.json()); this.okunan[f.name]=f.sha; }catch(e){ console.warn("okuma",f.name,e); } }
+    if(yeni.length){ uzakUygula(yeni); DB.yaz("ghOkunan",this.okunan).catch(()=>{}); }
+  }
+};
+async function ghBaslat(){
+  await GH.ayarAl(); if(!GH.ayar){ SENK.db=null; SENK.assets=null; senkGoster(); return; }
+  SENK.db={ doc:p=>({ set:o=>GH.yaz(p+".json", GH.b64(JSON.stringify(o))) }) };
+  SENK.assets={ upload:async blob=>{ const id="foto/"+uid("g")+".jpg"; await GH.yaz(id, await GH.b64blob(blob)); return {id:"gh:"+id}; } };
+  if(!GH.ayar.ilkGonderim){ SENK.SON={}; senkFark(); GH.ayar.ilkGonderim=new Date().toISOString(); await DB.yaz("ghAyar",GH.ayar); } // bu cihazdaki eski kayıtlar da bir kez gönderilir
+  const tur=async()=>{ try{ await GH.cek(); if(SENK.durum!=="dolu") SENK.durum="ok"; SENK.son=simdiSaat(); }catch(e){ SENK.durum=e.code==="yetki"?"yetki":"cevrimdisi"; console.warn("çekme",e); } senkGoster(); senkCalis(); };
+  if(!GH.zam){ window.addEventListener("online",()=>{ senkGoster(); tur(); }); window.addEventListener("offline",senkGoster);
+    document.addEventListener("visibilitychange",()=>{ if(!document.hidden) tur(); });
+    GH.zam=setInterval(()=>{ if(!document.hidden) tur(); },45000); }
+  tur();
 }
 async function senkKur(){
   try{ const c=await DB.al("senk"); if(c){ SENK.cihaz=c.cihaz; SENK.kova=c.kova||{}; SENK.kirli=c.kirli||{}; SENK.TS=c.TS||{}; SENK.gonderildi=c.gonderildi||{}; } }catch(e){}
   if(!SENK.cihaz){ SENK.cihaz="c"+Math.random().toString(36).slice(2,9); }
   senkBaslangic(); senkGoster();
-  if(!ARTIFACT) return;
+  if(!ARTIFACT){ await ghBaslat(); return; }
   let db=null; try{ db=await window.claude.use("db"); }catch(e){}
   if(!db){ senkGoster(); return; }
   SENK.db=db; try{ SENK.assets=await window.claude.use("assets"); }catch(e){}
@@ -732,7 +778,10 @@ async function fotoKaydet(canvas, maks=1100, kalite=.72){
   c.width=Math.round(canvas.width*s); c.height=Math.round(canvas.height*s); c.getContext("2d").drawImage(canvas,0,0,c.width,c.height);
   const id=uid("f"); await DB.yaz("foto:"+id, c.toDataURL("image/jpeg",kalite)); return id;
 }
-async function fotoAl(id, ent){ if(!id) return null; let d=null; try{ d=await DB.al("foto:"+id); }catch(e){} if(d) return d; const a=ent&&ent.fotoAsset&&ent.fotoAsset[id]; return a?"/_blob/"+a:null; }
+async function fotoAl(id, ent){ if(!id) return null; let d=null; try{ d=await DB.al("foto:"+id); }catch(e){} if(d) return d;
+  const a=ent&&ent.fotoAsset&&ent.fotoAsset[id]; if(!a) return null;
+  if(String(a).startsWith("gh:")){ try{ const r=await GH.oku(a.slice(3)); const b=await r.blob(); d=await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); }); d=d.replace(/^data:[^;]*;/,"data:image/jpeg;"); await DB.yaz("foto:"+id,d); return d; }catch(e){ return null; } }
+  return "/_blob/"+a; }
 
 /* ===== ÜRÜN GÖRSELİ + TAM ÜRÜN BİLGİSİ ===== */
 async function gorselKaydet(kaynak){ // canvas | Blob | File
@@ -2185,6 +2234,12 @@ SAYFA.defter = {
 /* ================== YEDEK ================== */
 SAYFA.yedek = {
   ilk(){
+    const ghGoster=async()=>{ await GH.ayarAl(); $("#ghRepo").value=(GH.ayar&&GH.ayar.repo)||"desaruhan-max/barkod360-veri"; $("#ghDurum").innerHTML=GH.ayar?"✅ Bağlı: <b>"+esc(GH.ayar.repo)+"</b>"+(SENK.son?" · son eşitleme "+esc(SENK.son):""):"Bağlı değil. Kayıtlar yalnız bu cihazda."; };
+    ghGoster();
+    $("#ghBagla").onclick=async()=>{ const repo=$("#ghRepo").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/$/,""), token=$("#ghToken").value.trim(); if(!repo||!token){ toast("Depo ve anahtarı girin",1); return; }
+      $("#ghDurum").textContent="⏳ Bağlanıyor…"; try{ await GH.dene(repo,token); await DB.yaz("ghAyar",{repo,token}); await DB.yaz("ghOkunan",{}); await DB.yaz("ghSha",{}); $("#ghToken").value=""; await ghBaslat(); ghGoster(); toast("Eşitleme açıldı"); }catch(e){ $("#ghDurum").innerHTML='<span class="neg">❌ '+esc(e.message||e)+"</span>"; } };
+    $("#ghSimdi").onclick=async()=>{ if(!GH.ayar){ toast("Önce bağlanın",1); return; } $("#ghDurum").textContent="⏳ Eşitleniyor…"; try{ await GH.cek(); await senkCalis(); }catch(e){ toast("Eşitlenemedi: "+e.message,1); } ghGoster(); };
+    $("#ghKes").onclick=async()=>{ if(await onayla("Bu cihazda eşitleme kapatılsın mı? (Kayıtlar silinmez.)","Kapat")){ await DB.sil("ghAyar"); GH.ayar=null; SENK.db=null; SENK.assets=null; senkGoster(); ghGoster(); } };
     const ckGoster=async()=>{ const k=await ClaudeOkur.anahtarAl(); $("#ckDurum").innerHTML=k?'✅ Anahtar kayıtlı (…'+esc(k.slice(-4))+'). Yeni ürünlerin fotoğrafı Claude ile okunur.':'Anahtar girilmedi. Fotoğraflar telefondaki okuyucuyla okunur (yalnız tarih).'; };
     ckGoster();
     $("#ckKaydet").onclick=async()=>{ const k=$("#ckAnahtar").value.trim(); if(!/^sk-ant-/.test(k)){ toast("Anahtar sk-ant- ile başlamalı",1); return; } await ClaudeOkur.anahtarYaz(k); $("#ckAnahtar").value=""; ckGoster(); toast("Anahtar kaydedildi"); };

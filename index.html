@@ -1942,7 +1942,8 @@ async function syEtiketOku(barkod, hazirDosya, sessiz){
   const d=$("#syAdDur")||$("#sySktDur"); const ilerle=(p,m)=>{ const e=$("#syAdDur")||$("#sySktDur"); if(e&&m) e.textContent="⏳ "+m; };
   try{
     const {R,c}=await ClaudeOkur.urunFotoOku(f,ilerle); const u=V.urunler[barkod]; if(!u) return; const yaz=[];
-    if(R.ad && (u.tanimsiz||!u.ad)){ u.ad=R.ad; u.tanimsiz=false; yaz.push("ad"); }
+    // elle "Etiketi Claude'a okut" denince arka etiketteki daha tam ad öncekinin yerine geçer
+    if(R.ad && (u.tanimsiz||!u.ad||(!sessiz && R.ad!==u.ad))){ const eski=u.tanimsiz?"":u.ad; u.ad=R.ad; u.tanimsiz=false; yaz.push(eski?"ad ("+eski+" → "+R.ad+")":"ad"); }
     const al=(k,v,et)=>{ if(v && !u[k]){ u[k]=v; yaz.push(et); } };
     al("marka",R.marka,"marka"); al("net",R.net,"miktar"); al("uretici",R.uretici,"üretici"); al("adres",R.adres,"adres"); al("isletme",R.isletme,"işletme no"); al("mensei",R.mensei,"menşei"); al("icerik",R.icerik,"içindekiler");
     if(R.saklama && (!u.saklama||u.saklama==="oda") && R.saklama!=="oda"){ u.saklama=R.saklama; yaz.push("saklama"); }
@@ -1973,7 +1974,7 @@ function sySonCiz(){
     ${adim(4,!!x,"Adet",`<div class="inrow" style="margin-top:4px;align-items:center"><button class="btn" id="syEksi">−1</button><input id="sySay" type="number" step="any" value="${x?x.miktar:0}" style="text-align:center;font-weight:800;font-size:20px"><button class="btn" id="syArti">+1</button><span class="small" style="white-space:nowrap">${esc(u.birim)}</span></div>
       ${u.koliAdet>1?`<div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><button class="btn sm" id="syKoliEksi">−1 koli</button><button class="btn sm primary" id="syKoliArti">+1 koli (${nf(u.koliAdet)} ${esc(u.birim)})</button><span class="small muted">${x&&koliMetin(u,x.miktar)?esc(koliMetin(u,x.miktar)):""}</span></div>`:`<div class="small muted" style="margin-top:6px"><a href="#" id="syKoliTanim">Koli ile saymak için kolide kaç ${esc(u.birim)} olduğunu yazın</a></div>`}
       <div class="small muted" style="margin-top:4px">Sistemde: ${miktarYaz(u,stokOf(barkod,s.kres))} · Sayılan: ${nf(syUrunSayilan(s,barkod))}</div>`)}
-    <details style="margin-top:6px"><summary class="small muted">Diğer işlemler</summary><div class="inrow" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" id="syAdYaz">✎ ${u.tanimsiz?"Adını yaz":"Düzenle"}</button><button class="btn sm" id="syEtiket">🤖 Etiketi Claude'a okut</button><button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button></div></details>
+    <details style="margin-top:6px"><summary class="small muted">Diğer işlemler</summary><div class="inrow" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" id="syAdYaz">✎ ${u.tanimsiz?"Adını yaz":"Düzenle"}</button><button class="btn sm" id="syEtiket">🤖 Arka etiketi Claude'a okut</button><button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button></div></details>
     <div class="small" style="margin-top:8px;color:var(--deep);font-weight:700">Sonraki ürün için barkodu okutun.</div></div>`;
   gorselYukle(e);
   $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);

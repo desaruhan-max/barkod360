@@ -545,6 +545,11 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
     <p class="hint" style="margin-bottom:6px"><b>Telefonu kamera olarak kullanmak:</b> Telefona ve bilgisayara <i>DroidCam</i> (Android) ya da <i>Iriun Webcam</i> uygulamasını bir kez kurun. Telefonu USB kabloyla bağlayın. Program kamera listesinde telefonu görür, internet gerekmez.</p>
     <p class="hint"><b>USB barkod tabancası:</b> Ek ayar gerekmez. "Barkod numarası" kutusuna tıklayıp okutun.</p>
   </div>
+  <div class="card">
+    <h3>🗑 Deneme kayıtlarını temizle</h3>
+    <p class="hint">Bütün ürün kartlarını, partileri, hareketleri ve sayımları siler. Programı denedikten sonra gerçek kullanıma temiz başlamak için. Tek bir ürünü silmek için Ürün Kartları → ürün → Bilgileri düzenle → Kartı sil.</p>
+    <button class="btn danger" id="ykTumSil">Bütün kayıtları sil</button>
+  </div>
 </section>
 </main>
 </div>
@@ -2165,6 +2170,15 @@ SAYFA.urunler = {
     $("#urTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Barkod</th><th>Ürün</th><th>Marka</th><th>Üretici / adres</th><th>Grup</th><th>Birim</th><th class="r">Toplam stok</th><th></th></tr></thead><tbody>${r.map(u=>`<tr class="tik" data-b="${esc(u.barkod)}"><td class="m"><img data-g="${esc(u.barkod)}" alt="" style="width:44px;height:44px;object-fit:contain;background:#fff;border-radius:6px;visibility:hidden;vertical-align:middle;margin-right:6px">${esc(u.barkod)}</td><td><b>${esc(u.ad)}</b>${u.net?' <span class="muted small">'+esc(u.net)+"</span>":""}${(u.alerjen||[]).length?'<div class="small" style="color:var(--accent)">Alerjen: '+esc(u.alerjen.join(", "))+"</div>":""}</td><td>${esc(u.marka||"")}</td><td class="small">${esc(u.uretici||"")}<div class="muted">${esc(u.adres||"")}</div></td><td class="m">${esc(u.grup||"")}</td><td>${esc(u.birim)}</td><td class="r">${nf(stokOf(u.barkod))}</td><td class="act"><button class="ib" title="Düzenle">✎</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Ürün kartı yok. İlk mal kabulde barkod okutulunca kendiliğinden oluşur.</div>';
     $$("#urTablo tr[data-b]").forEach(x=>x.onclick=e=>{ if(e.target.closest(".ib")) urunDuzenle(x.dataset.b); else urunDetay(x.dataset.b); }); gorselYukle($("#urTablo")); }
 };
+// Ürün kartını, varsa partileri ve hareketleriyle birlikte siler (deneme kayıtlarını temizlemek için). Silme diğer cihaza da gider.
+async function urunSil(kod){
+  const u=V.urunler[kod]||{ad:kod}; const lotIds=new Set(Object.values(V.lotlar).filter(l=>l.barkod===kod).map(l=>l.id)); const hs=V.hareketler.filter(h=>h.barkod===kod||lotIds.has(h.lotId));
+  const ek=lotIds.size||hs.length?`<p><b>Dikkat:</b> Bu ürünün <b>${lotIds.size} partisi</b> ve <b>${hs.length} hareket kaydı</b> (giriş, çıkış, sayım) da silinecek; stoktan tamamen kalkar. Geri alınamaz.</p>`:"";
+  if(!await onayla("<b>"+esc(u.ad)+"</b> ürün kartı silinsin mi?"+ek,"Sil")) return;
+  delete V.urunler[kod]; lotIds.forEach(id=>delete V.lotlar[id]); V.hareketler=V.hareketler.filter(h=>!(h.barkod===kod||lotIds.has(h.lotId)));
+  const sa=V.aktifSayim; if(sa){ for(const k of Object.keys(sa.sayilan)) if(sa.sayilan[k].barkod===kod) delete sa.sayilan[k]; if(SY.son&&SY.son.barkod===kod) SY.son=null; }
+  kaydet(); urunListesiGuncelle(); if(AKTIF_SEKME==="urunler") SAYFA.urunler.goster(); if(sa && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün silindi");
+}
 function urunDuzenle(kod, yeni){
   const u=Object.assign({},V.urunler[kod]||{barkod:kod,ad:"",birim:"kg",saklama:"oda",alerjen:[],grup:GRUPLAR[0]});
   const f=(id,et,v,tip="")=>`<label class="f${id==="ad"||id==="uretici"||id==="adres"?" w2":""}">${et}${id==="adres"?`<textarea id="ue_${id}" rows="2">${esc(v||"")}</textarea>`:`<input id="ue_${id}" ${tip} value="${esc(v==null?"":v)}">`}</label>`;
@@ -2175,7 +2189,7 @@ function urunDuzenle(kod, yeni){
     <label class="f w2" style="grid-column:1/-1">İçindekiler<textarea id="ue_icerik" rows="3">${esc(u.icerik||"")}</textarea></label>${f("acilis","Açıldıktan sonra (gün)",u.acilis,'type="number" min="0"')}${f("min","Asgari stok",u.min,'type="number" min="0" step="any"')}</div>
     <div class="small muted" style="font-weight:600">Alerjenler</div><div class="chips al" id="ue_al">${ALERJENLER.map(a=>`<button data-a="${esc(a)}" class="${(u.alerjen||[]).includes(a)?"on":""}">${esc(a)}</button>`).join("")}</div>
     ${yeni?'<p class="hint">Bu iç kod (20… ile başlar) yalnızca kurum içinde geçerlidir. "Etiket Bas"tan barkodunu basıp ürünün kabına yapıştırabilirsiniz.</p>':""}`,
-    [ ...(yeni||Object.values(V.lotlar).some(l=>l.barkod===kod)?[]:[{t:"Kartı sil",c:"danger",f:async()=>{ if(await onayla("Ürün kartı silinsin mi?","Sil")){ delete V.urunler[kod]; const sa=V.aktifSayim; if(sa){ for(const k of Object.keys(sa.sayilan)) if(sa.sayilan[k].barkod===kod) delete sa.sayilan[k]; if(SY.son&&SY.son.barkod===kod) SY.son=null; } kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(sa && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı silindi"); } }}]),
+    [ ...(yeni?[]:[{t:"Kartı sil",c:"danger",f:()=>{ setTimeout(()=>urunSil(kod),30); }}]),
       {t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const ad=$("#ue_ad").value.trim(); if(!ad){ toast("Ürün adı gerekli",1); return false; }
       V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),icerik:$("#ue_icerik").value.trim(),koliAdet:$("#ue_koliAdet").value===""?null:+$("#ue_koliAdet").value,koliBarkod:$("#ue_koliBarkod").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
       kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(V.aktifSayim && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı kaydedildi"); }}], true);
@@ -2240,6 +2254,11 @@ SAYFA.yedek = {
     $("#ghBagla").onclick=async()=>{ const repo=$("#ghRepo").value.trim().replace(/^https?:\/\/github\.com\//,"").replace(/\/$/,""), token=$("#ghToken").value.trim(); if(!repo||!token){ toast("Depo ve anahtarı girin",1); return; }
       $("#ghDurum").textContent="⏳ Bağlanıyor…"; try{ await GH.dene(repo,token); await DB.yaz("ghAyar",{repo,token}); await DB.yaz("ghOkunan",{}); await DB.yaz("ghSha",{}); $("#ghToken").value=""; await ghBaslat(); ghGoster(); toast("Eşitleme açıldı"); }catch(e){ $("#ghDurum").innerHTML='<span class="neg">❌ '+esc(e.message||e)+"</span>"; } };
     $("#ghSimdi").onclick=async()=>{ if(!GH.ayar){ toast("Önce bağlanın",1); return; } $("#ghDurum").textContent="⏳ Eşitleniyor…"; try{ await GH.cek(); await senkCalis(); }catch(e){ toast("Eşitlenemedi: "+e.message,1); } ghGoster(); };
+    $("#ykTumSil").onclick=async()=>{ const n=Object.keys(V.urunler).length;
+      if(!await onayla(`<b>Bütün kayıtlar silinecek:</b> ${n} ürün kartı, ${Object.keys(V.lotlar).length} parti, ${V.hareketler.length} hareket, ${V.sayimlar.length} sayım. Eşitleme açıksa diğer cihazdan da silinir. Geri alınamaz.<br><br>Yalnız deneme kayıtlarını temizlemek için kullanın.`,"Hepsini sil")) return;
+      if(!await onayla("Emin misiniz? Bu son onay.","Evet, hepsini sil")) return;
+      V.urunler={}; V.lotlar={}; V.hareketler=[]; V.sayimlar=[]; V.aktifSayim=null; if(typeof SY!=="undefined"){ SY.son=null; SY.hedef={}; SY.grup=null; }
+      kaydet(); urunListesiGuncelle(); toast("Bütün kayıtlar silindi"); setTimeout(()=>sekme("konsol"),300); };
     $("#ghQrGoster").onclick=async()=>{ await GH.ayarAl(); if(!GH.ayar){ toast("Önce bu cihazda bağlanın",1); return; }
       const veri="B360SENK:"+btoa(JSON.stringify({repo:GH.ayar.repo,token:GH.ayar.token}));
       let svg=""; try{ svg=await Barkod.svg(veri,"QRCode"); }catch(e){ toast("QR oluşturulamadı: "+e.message,1); return; }

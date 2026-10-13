@@ -1739,6 +1739,32 @@ function syBarkod(a){
   if(kc>1) toast("Koli okutuldu: +"+kc+" "+u.birim);
   syEkle(u.barkod, lotId, art, true);
 }
+// Tek hareket: barkoddan sonra kamera açık kalır; paketi çevirip tarihe tutunca tarih okunur ve sayım o tarihe geçer
+async function syOtoTarih(barkod){
+  const no=SY.otoNo=(SY.otoNo||0)+1; const bas=Date.now(); const s=V.aktifSayim;
+  const durum=m=>{ const d=$("#sySktDur"); if(d) d.innerHTML=m; };
+  durum("📅 Paketi çevirip <b>tarihin yazdığı yeri</b> kameraya tutun…");
+  try{ await YaziOkur.hazirla(); }catch(e){ durum("Tarih okuyucu yüklenemedi. Tarihe dokunun ya da yazın."); return; }
+  const gecerli=()=>no===SY.otoNo && V.aktifSayim===s && SY.kam && SY.kam.akis && SY.son && SY.son.barkod===barkod && Date.now()-bas<45000;
+  const sayac={};
+  while(gecerli()){
+    const c=SY.kam.orta()||SY.kam.kare(1600); if(!c){ await new Promise(r=>setTimeout(r,300)); continue; }
+    let skt=""; try{ const tm=await TarihMotoru.oku(c,null,null); skt=tm&&tm.R&&tm.R.skt||""; }catch(e){ console.warn(e); }
+    if(!gecerli()) return;
+    if(!skt){ await new Promise(r=>setTimeout(r,150)); continue; }
+    const g=gunFark(skt); if(g<-400||g>2200){ continue; } // anlamsız tarih
+    const var_=lotlarOf(barkod,s.kres).find(l=>!l.red&&l.skt===skt);
+    sayac[skt]=(sayac[skt]||0)+1;
+    // depodaki bir tarihle aynıysa hemen; yeni tarihse iki kez aynı okunursa kabul (yanlış okumaya karşı)
+    if(var_ || sayac[skt]>=2){
+      const hedef=sySktAnahtar(barkod,skt); if(!SY.son || SY.son.lotId!==hedef) syHedefSec(barkod,hedef); else syCiz();
+      bip(); SY.kam.durum("Tarih bulundu ✓ "+trTarih(skt));
+      durum("✅ Tarih okundu: <b>"+trTarih(skt)+"</b>"+(var_?"":" (yeni tarih)")+". Yanlışsa doğru tarihe dokunun.");
+      return; }
+    durum("📅 "+trTarih(skt)+" okundu, doğrulanıyor… kamerayı sabit tutun");
+  }
+  if(no===SY.otoNo && V.aktifSayim===s) durum("Tarih okunamadı. Doğru tarihe dokunun ya da yeni tarihi yazın.");
+}
 // Bu ürün için sayımın gideceği STT/TETT: son seçilen; yoksa stokta tek parti varsa o
 function syVarsayilanHedef(barkod){
   if(SY.hedef && barkod in SY.hedef) return SY.hedef[barkod];
@@ -1758,6 +1784,7 @@ function syEkle(barkod, lotId, art, okutma){
 // STT/TETT seçilince: bu ürün için az önce art arda okutulanlar seçilen tarihe taşınır, sonrakiler de oraya sayılır
 function syHedefSec(barkod, yeniLot){
   const s=V.aktifSayim; SY.hedef=SY.hedef||{}; SY.hedef[barkod]=yeniLot;
+  if(SY.bekleyenFoto && SY.bekleyenFoto.barkod===barkod && yeniLot){ const t=syLotSkt(yeniLot); s.fotolar=s.fotolar||{}; (s.fotolar[barkod+"|"+t]=s.fotolar[barkod+"|"+t]||[]).push(SY.bekleyenFoto.fotoId); SY.bekleyenFoto=null; }
   const g=SY.grup;
   if(g && g.barkod===barkod && g.lotId!==yeniLot && g.miktar>0){
     const ek=syAnahtar(barkod,g.lotId); const x=s.sayilan[ek]; const tas=Math.min(g.miktar, x?x.miktar:0);
@@ -1769,14 +1796,20 @@ function syHedefSec(barkod, yeniLot){
   SY.son={barkod,lotId:yeniLot}; kaydet(); syCiz();
 }
 async function sySktFoto(barkod){
-  const f=await gorselSec(true); if(!f) return;
-  const d=$("#sySktDur"); if(d) d.textContent="⏳ Tarih okunuyor…";
-  try{ const bm=await createImageBitmap(f); const c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0);
-    const tm=await TarihMotoru.oku(c,null,(p,m)=>{ if(d&&m) d.textContent="⏳ "+m; });
-    const skt=tm&&tm.R&&tm.R.skt;
-    if(skt){ $("#sySktYeni").value=skt; if(d) d.innerHTML='Okunan tarih: <b>'+trTarih(skt)+'</b>. Doğruysa <b>Ekle</b>ye basın, değilse düzeltin.'; }
-    else if(d) d.textContent="Tarih okunamadı. Tarihi elle seçin.";
-  }catch(e){ if(d) d.textContent="Tarih okunamadı: "+(e.message||e); }
+  const f=await gorselSec(true); if(!f) return; const s=V.aktifSayim;
+  const d=()=>$("#sySktDur"); const yaz=m=>{ const e=d(); if(e) e.innerHTML=m; };
+  yaz("⏳ Tarih okunuyor…");
+  let c, fotoId=null;
+  try{ const bm=await createImageBitmap(f); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); fotoId=await fotoKaydet(c); }catch(e){ yaz("Resim açılamadı: "+esc(e.message||e)); return; }
+  let skt="";
+  try{
+    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=R.skt||""; }
+    if(!skt){ const tm=await TarihMotoru.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=tm&&tm.R&&tm.R.skt||""; }
+  }catch(e){ console.warn(e); }
+  if(V.aktifSayim!==s) return;
+  s.fotolar=s.fotolar||{};
+  if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); syHedefSec(barkod,sySktAnahtar(barkod,skt)); bip(); yaz("✅ Okunan tarih: <b>"+trTarih(skt)+"</b>. Yanlışsa doğru tarihe dokunun ya da yazın."); }
+  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz("Resim kaydedildi ama tarih okunamadı. Tarihe dokunun ya da yazın (örn. 190127)."); SY.bekleyenFoto={barkod,fotoId}; }
 }
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;
@@ -1847,29 +1880,30 @@ async function syEtiketOku(barkod){
 function sySonCiz(){
   const s=V.aktifSayim, e=$("#sySon"); if(!e) return; if(!SY.son){ e.innerHTML=""; return; }
   const {barkod,lotId}=SY.son, u=V.urunler[barkod]; if(!u){ e.innerHTML=""; return; } const k=syAnahtar(barkod,lotId); const x=s.sayilan[k];
-  // tarih seçenekleri: stoktaki partiler + bu sayımda eklenen yeni tarihler + tarihsiz
   const sec=new Map(); fefoSirala(lotlarOf(barkod,s.kres).filter(l=>!l.red&&(kalanOf(l.id)>0||s.sayilan[syAnahtar(barkod,l.id)]))).forEach(l=>sec.set(l.id,l.skt));
   Object.values(s.sayilan).filter(y=>y.barkod===barkod&&y.lotId&&y.lotId.startsWith("yeni:")).forEach(y=>sec.set(y.lotId,y.lotId.slice(5)));
   if(lotId && !sec.has(lotId)) sec.set(lotId,syLotSkt(lotId));
   const say=id=>{ const y=s.sayilan[syAnahtar(barkod,id)]; return y?y.miktar:0; };
   const chip=(id,et)=>`<button type="button" data-hl="${esc(id||"")}" class="${(id||null)===(lotId||null)?"on":""}">${et}${say(id)?" · <b>"+nf(say(id))+"</b>":""}</button>`;
+  const skt=syLotSkt(lotId); const sktFoto=(s.fotolar||{})[barkod+"|"+skt];
+  const adim=(no,ok,baslik,ic)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:${ok?"#2e8f6f":"#9aa5a0"}">${ok?"✓":no}</div><div style="flex:1;min-width:0"><div style="font-weight:800">${baslik}</div>${ic}</div></div>`;
   e.innerHTML=`<div class="sonuc">
-    <div style="display:flex;gap:10px;align-items:flex-start"><img data-g="${esc(barkod)}" alt="" style="display:none;width:72px;height:72px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden">
-      <div style="flex:1;min-width:0"><div class="small muted">Son okutulan</div><div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div>
-      <div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>
-      <div class="inrow" style="gap:6px;margin-top:4px;flex-wrap:wrap">${u.tanimsiz?'<button class="btn sm primary" id="syAdYaz">✎ Adını yaz</button>':'<button class="btn sm" id="syAdYaz">✎ Düzenle</button>'}<button class="btn sm gold" id="syEtiket">📸 Etiketi okut, bilgileri doldur</button><button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button>${u.gorselId?"":'<button class="btn sm" id="syGorsel">📷 Ürün görseli çek</button>'}</div></div></div>
-    <div class="small" style="font-weight:700;margin-top:10px">Bu ürünün STT / TETT'si hangisi?</div>
-    <div class="skt-chips">${[...sec].map(([id,skt])=>chip(id,(skt?trTarih(skt):"tarihsiz")+(id.startsWith("yeni:")?" (yeni)":""))).join("")}${chip(null,"Tarih bilinmiyor")}</div>
-    <div class="inrow" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="sySktYeni" style="max-width:170px"><button class="btn sm" id="sySktEkle">+ Yeni tarih ekle</button><button class="btn sm gold" id="sySktFoto">📸 Tarihin fotoğrafı</button></div>
-    <div class="small muted" id="sySktDur"></div>
-    <div class="inrow" style="margin-top:10px;align-items:center"><button class="btn" id="syEksi">−1</button><input id="sySay" type="number" step="any" value="${x?x.miktar:0}" style="text-align:center;font-weight:800;font-size:18px"><button class="btn" id="syArti">+1</button><span class="small" style="white-space:nowrap">${esc(u.birim)}</span></div>
-    ${u.koliAdet>1?`<div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><button class="btn sm" id="syKoliEksi">−1 koli</button><button class="btn sm primary" id="syKoliArti">+1 koli (${nf(u.koliAdet)} ${esc(u.birim)})</button><span class="small muted">${x&&koliMetin(u,x.miktar)?esc(koliMetin(u,x.miktar)):""}</span></div>`:`<div class="small muted" style="margin-top:6px">Koli ile saymak için <a href="#" id="syKoliTanim">kolide kaç ${esc(u.birim)} olduğunu yazın</a>.</div>`}
-    <div class="small muted" style="margin-top:4px">${lotId?"Bu tarihte sayılan":"Tarihsiz sayılan"} · Sistemde toplam: ${miktarYaz(u,stokOf(barkod,s.kres))} · Sayılan toplam: ${nf(syUrunSayilan(s,barkod))}</div></div>`;
+    ${adim(1,true,"Barkod okundu",`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
+    ${adim(2,!!u.gorselId,"Ürünün resmi",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId?"Yeniden çek":"Ürünün resmini çek"}</button></div>`)}
+    ${adim(3,!!skt,"STT / TETT",`<div style="margin-top:4px"><button class="btn ${skt?"sm":"gold"}" id="sySktFoto">📸 ${skt?"Tarihin resmini yeniden çek":"Tarihin resmini çek"}</button>${sktFoto?' <span class="small">resim kaydedildi ✓</span>':""}</div>
+      <div class="small muted" id="sySktDur" style="margin-top:4px">${skt?"Seçili tarih: <b>"+trTarih(skt)+"</b>":"Resmi çekince tarih okunur. Okunamazsa aşağıdan seçin ya da yazın."}</div>
+      <div class="skt-chips">${[...sec].map(([id,t])=>chip(id,(t?trTarih(t):"tarihsiz")+(id.startsWith("yeni:")?" (yeni)":""))).join("")}</div>
+      <div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><input id="syTarihYaz" inputmode="numeric" maxlength="10" placeholder="Tarihi yaz: 190127" style="max-width:190px;font-size:16px"></div>`)}
+    ${adim(4,!!x,"Adet",`<div class="inrow" style="margin-top:4px;align-items:center"><button class="btn" id="syEksi">−1</button><input id="sySay" type="number" step="any" value="${x?x.miktar:0}" style="text-align:center;font-weight:800;font-size:20px"><button class="btn" id="syArti">+1</button><span class="small" style="white-space:nowrap">${esc(u.birim)}</span></div>
+      ${u.koliAdet>1?`<div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><button class="btn sm" id="syKoliEksi">−1 koli</button><button class="btn sm primary" id="syKoliArti">+1 koli (${nf(u.koliAdet)} ${esc(u.birim)})</button><span class="small muted">${x&&koliMetin(u,x.miktar)?esc(koliMetin(u,x.miktar)):""}</span></div>`:`<div class="small muted" style="margin-top:6px"><a href="#" id="syKoliTanim">Koli ile saymak için kolide kaç ${esc(u.birim)} olduğunu yazın</a></div>`}
+      <div class="small muted" style="margin-top:4px">Sistemde: ${miktarYaz(u,stokOf(barkod,s.kres))} · Sayılan: ${nf(syUrunSayilan(s,barkod))}</div>`)}
+    <details style="margin-top:6px"><summary class="small muted">Diğer işlemler</summary><div class="inrow" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" id="syAdYaz">✎ ${u.tanimsiz?"Adını yaz":"Düzenle"}</button><button class="btn sm" id="syEtiket">🤖 Etiketi Claude'a okut</button><button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button></div></details>
+    <div class="small" style="margin-top:8px;color:var(--deep);font-weight:700">Sonraki ürün için barkodu okutun.</div></div>`;
   gorselYukle(e);
   $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
-  const g=$("#syGorsel"); if(g) g.onclick=async()=>{ if(await urunGorselDegistir(barkod,true)) sySonCiz(); };
+  $("#syGorsel").onclick=async()=>{ if(await urunGorselDegistir(barkod,true)) sySonCiz(); };
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
-  $("#sySktEkle").onclick=()=>{ const t=$("#sySktYeni").value; if(!t){ toast("Önce tarihi seçin",1); return; } syHedefSec(barkod,sySktAnahtar(barkod,t)); };
+  const ty=$("#syTarihYaz"); ty.oninput=()=>{ const d=ty.value.replace(/\D/g,""); let t=null; if(d.length===6) t=tarihGecerli(+d.slice(4,6),+d.slice(2,4),+d.slice(0,2)); else if(d.length===8) t=tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)); if(t){ syHedefSec(barkod,sySktAnahtar(barkod,t)); toast("Tarih: "+trTarih(t)); } };
   $("#sySktFoto").onclick=()=>sySktFoto(barkod);
   $("#syEksi").onclick=()=>syEkle(barkod,lotId,-1); $("#syArti").onclick=()=>syEkle(barkod,lotId,1,true);
   const ka=$("#syKoliArti"); if(ka){ ka.onclick=()=>syEkle(barkod,lotId,+u.koliAdet,true); $("#syKoliEksi").onclick=()=>syEkle(barkod,lotId,-u.koliAdet); }
@@ -1917,6 +1951,7 @@ function syIsle(bosSifir){
         if(!l){ l={id:uid("l"),kres:s.kres,barkod:x.b,lot:"SAYIM",skt,sktTur:(V.urunler[x.b]||{}).son&&V.urunler[x.b].son.sktTur||"STT",girisTarihi:bugun(),fiyat:x.fiyat,not:"Sayımda bulunan parti",fotoIds:[]}; V.lotlar[l.id]=l; }
         lid=l.id; }
       sktDag.push([syLotSkt(lid)||"", y.miktar]);
+      if(lid){ const fl=(s.fotolar||{})[x.b+"|"+(V.lotlar[lid].skt||"")]; if(fl&&fl.length){ const L=V.lotlar[lid]; L.fotoIds=[...new Set([...(L.fotoIds||[]),...fl])]; } }
       if(lid) lotSay[lid]=(lotSay[lid]||0)+y.miktar; else genel+=y.miktar; }
     const ls=fefoSirala(lotlarOf(x.b,s.kres));
     let hedef={}; // lotId -> yeni miktar

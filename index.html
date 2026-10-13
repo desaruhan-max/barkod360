@@ -1319,7 +1319,7 @@ class Kamera{
     URL.revokeObjectURL(img.src);
     const yuk=$(".fotoCek span",this.kap); if(yuk) yuk.textContent="⏳ Okunuyor…";
     try{ let src=c; if(Math.max(c.width,c.height)>2400){ const s=2400/Math.max(c.width,c.height); src=document.createElement("canvas"); src.width=Math.round(c.width*s); src.height=Math.round(c.height*s); src.getContext("2d").drawImage(c,0,0,src.width,src.height); }
-      const r=await Barkod.oku(src.getContext("2d").getImageData(0,0,src.width,src.height)); const tekil={}; const g=r.filter(x=>x.isValid!==false).filter(x=>this.o.coklu||!tekil[x.text]&&(tekil[x.text]=1)).map(x=>barkodCoz(x.text,x.format));
+      const r=await Barkod.oku(src.getContext("2d").getImageData(0,0,src.width,src.height)); const tekil={}; const g=r.filter(x=>x.isValid!==false).filter(x=>!tekil[x.text]&&(tekil[x.text]=1)).map(x=>barkodCoz(x.text,x.format));
       if(g.length) await this.bildir(g,true); else if(!this.o.onFoto){ bip(false); toast("Fotoğrafta barkod bulunamadı. Barkoda daha yakından, net çekin.",1); } }
     catch(e){ toast("Barkod okunamadı: "+e.message,1); }
     finally{ if(yuk) yuk.textContent=this.o.fotoMetin||"📸 Fotoğraf çek"; }
@@ -1792,6 +1792,10 @@ function syAnahtar(barkod, lotId){ return barkod+(lotId?"|"+lotId:""); }
 function syUrunSayilan(s, barkod){ let t=0; for(const k in s.sayilan){ if(s.sayilan[k].barkod===barkod) t+=s.sayilan[k].miktar; } return yuvarla(t); }
 function syBarkod(a){
   const s=V.aktifSayim; if(!s) return;
+  // canlı kamerada aynı barkod birkaç saniye içinde tekrar görülürse sayılmaz (bir okutma = 1). Aynı üründen bir tane daha için +1'e basın ya da ürünü değiştirip tekrar okutun.
+  const simdi=Date.now(); const kod=a.gtin||a.ham;
+  if(!a.foto && SY.sonOkuma && SY.sonOkuma.kod===kod && simdi-SY.sonOkuma.t<4000){ SY.sonOkuma.t=simdi; return; }
+  SY.sonOkuma={kod,t:simdi};
   let u=urunBul(a.gtin); if(!u && a.tartili) u=urunBul(a.tartili.kod);
   if(!u){ bip(); syYeniUrun(a); return; }
   let lotId=null; if(a.lot){ const l=lotlarOf(u.barkod,s.kres).find(x=>(x.lot||"")===a.lot && (!a.skt||x.skt===a.skt)); if(l) lotId=l.id; }
@@ -1912,9 +1916,9 @@ function syCiz(){
   if(s.kres!==aktifKres()){ ust.innerHTML=""; gv.innerHTML=`<div class="banner">Devam eden sayım <b>${esc(s.kres)}</b> için. Sayıma dönmek için soldan o kreşi seçin.</div>`; return; }
   ust.innerHTML=`<button class="btn sm danger" id="syIptal">Sayımı iptal et</button><button class="btn sm gold" id="syBitir">Sayımı bitir ve işle</button>`;
   if(!$("#syKamW")){
-    gv.innerHTML=`<div class="grid2"><div><div class="card sticky"><h3>Okut</h3><p class="hint">Her okutma +1. Fotoğrafta birden fazla barkod varsa her biri sayılır. Bluetooth barkod okuyucu bağlıysa barkod no kutusuna art arda okutun.</p><div id="syKamW"></div><div id="sySon"></div></div></div>
+    gv.innerHTML=`<div class="grid2"><div><div class="card sticky"><h3>Okut</h3><p class="hint">Bir okutma = 1. Aynı üründen bir tane daha saymak için <b>+1</b>e basın. Barkod kameranın önünde kalsa da tekrar saymaz.</p><div id="syKamW"></div><div id="sySon"></div></div></div>
       <div><div class="card"><div class="toolbar"><input type="search" id="syAra" placeholder="Listede ara…"><label class="small"><input type="checkbox" id="syFark"> Yalnızca farklılar</label><span class="small muted" id="syOzet"></span></div><div id="syTablo"></div></div></div></div>`;
-    SY.kam=new Kamera($("#syKamW"),{onBarkod:syBarkod,tekrarMs:700,coklu:true});
+    SY.kam=new Kamera($("#syKamW"),{onBarkod:syBarkod,tekrarMs:3000,coklu:true});
     $("#syAra").oninput=e=>{ SY.ara=e.target.value; syTablo(); }; $("#syFark").onchange=e=>{ SY.sadeceFark=e.target.checked; syTablo(); };
   }
   $("#syIptal").onclick=async()=>{ if(await onayla("Sayım iptal edilecek, okutulanlar silinecek. Stoğa hiçbir şey işlenmez.","Sayımı iptal et")){ V.aktifSayim=null; kaydet(); if(SY.kam) SY.kam.kapat(); $("#syBody").innerHTML=""; syCiz(); } };

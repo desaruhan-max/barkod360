@@ -1875,7 +1875,8 @@ async function sySktFoto(barkod){
   if(skt && ut && skt<=ut) skt=""; // üretim tarihi STT sanılmasın
   if(V.aktifSayim!==s) return;
   s.fotolar=s.fotolar||{};
-  if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); syHedefSec(barkod,sySktAnahtar(barkod,skt)); bip(); yaz("✅ Okunan tarih: <b>"+trTarih(skt)+"</b>. Yanlışsa doğru tarihe dokunun ya da yazın."); }
+  if(skt && ut){ s.ureTar=s.ureTar||{}; s.ureTar[barkod+"|"+skt]=ut; }
+  if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); syHedefSec(barkod,sySktAnahtar(barkod,skt)); bip(); yaz("✅ STT/TETT: <b>"+trTarih(skt)+"</b>"+(ut?" · Üretim: <b>"+trTarih(ut)+"</b>":"")+". Yanlışsa doğru tarihe dokunun ya da yazın."); }
   else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz((ut?"Yalnız <b>üretim tarihi ("+trTarih(ut)+")</b> okunabildi, STT/TETT okunamadı. ":"Resim kaydedildi ama tarih okunamadı. ")+"STT/TETT'yi yazın (örn. 190127) ya da tarihe dokunun. İsterseniz yalnız STT/TETT yazan yeri yakından çekin."); SY.bekleyenFoto={barkod,fotoId}; }
 }
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
@@ -2018,7 +2019,7 @@ function syIsle(bosSifir){
     const lotSay={}; let genel=0; const sktDag=[];
     for(const k in s.sayilan){ const y=s.sayilan[k]; if(y.barkod!==x.b) continue; let lid=y.lotId;
       if(lid && lid.startsWith("yeni:")){ const skt=lid.slice(5); let l=lotlarOf(x.b,s.kres).find(z=>!z.red&&z.skt===skt);
-        if(!l){ l={id:uid("l"),kres:s.kres,barkod:x.b,lot:"SAYIM",skt,sktTur:(V.urunler[x.b]||{}).son&&V.urunler[x.b].son.sktTur||"STT",girisTarihi:bugun(),fiyat:x.fiyat,not:"Sayımda bulunan parti",fotoIds:[]}; V.lotlar[l.id]=l; }
+        if(!l){ l={id:uid("l"),kres:s.kres,barkod:x.b,lot:"SAYIM",skt,ut:(s.ureTar||{})[x.b+"|"+skt]||"",sktTur:(V.urunler[x.b]||{}).son&&V.urunler[x.b].son.sktTur||"STT",girisTarihi:bugun(),fiyat:x.fiyat,not:"Sayımda bulunan parti",fotoIds:[]}; V.lotlar[l.id]=l; }
         lid=l.id; }
       sktDag.push([syLotSkt(lid)||"", y.miktar]);
       if(lid){ const fl=(s.fotolar||{})[x.b+"|"+(V.lotlar[lid].skt||"")]; if(fl&&fl.length){ const L=V.lotlar[lid]; L.fotoIds=[...new Set([...(L.fotoIds||[]),...fl])]; } }

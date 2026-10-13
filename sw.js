@@ -1,5 +1,5 @@
 // BARKOD360 — internetsiz açılış için önbellek
-const SURUM="b360-ffca3af490";
+const SURUM="b360-bb53af2380";
 const DOSYALAR=["./","index.html","manifest.webmanifest","ikon-192.png","ikon-512.png","ikon-maskable-512.png","lib/barkod-motoru.js","lib/yazi-okuma-motoru.js"];
 self.addEventListener("install",e=>{ e.waitUntil(caches.open(SURUM).then(c=>c.addAll(DOSYALAR)).then(()=>self.skipWaiting())); });
 self.addEventListener("activate",e=>{ e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==SURUM).map(k=>caches.delete(k)))).then(()=>self.clients.claim())); });

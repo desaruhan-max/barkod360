@@ -1097,9 +1097,13 @@ class Kamera{
   async ac(){
     if(AKTIF_KAMERA && AKTIF_KAMERA!==this) AKTIF_KAMERA.kapat();
     this.kapat(true);
-    const id=$(".kSec",this.kap).value;
+    let id=$(".kSec",this.kap).value;
+    // telefonda birden çok arka kamera olabilir; geniş açı (ultra wide) yakında odaklamaz → ana arka kamerayı seç
+    if(!id){ try{ const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput"&&d.label);
+        const arka=ds.filter(d=>/back|arka|rear|environment/i.test(d.label)&&!/wide|ultra|geniş|tele|macro|depth/i.test(d.label));
+        if(arka.length){ arka.sort((a,b)=>a.label.localeCompare(b.label,undefined,{numeric:true})); id=arka[0].deviceId; } }catch(_){} }
     try{
-      this.akis=await navigator.mediaDevices.getUserMedia({video:{deviceId:id?{exact:id}:undefined, width:{ideal:1920}, height:{ideal:1080}, facingMode:id?undefined:"environment"},audio:false});
+      this.akis=await navigator.mediaDevices.getUserMedia({video:{deviceId:id?{exact:id}:undefined, width:{ideal:1920}, height:{ideal:1080}, facingMode:id?undefined:{ideal:"environment"}},audio:false});
     }catch(e){ try{localStorage.removeItem("b360canli");}catch(_){}
       if(ARTIFACT && e.name!=="NotFoundError"){ $(".canli",this.kap).classList.add("gizli"); toast("Canlı kamera bu ekranda açılmıyor. 📸 Fotoğraf çek ile devam edin.",1); }
       else toast("Kamera açılamadı: "+(e.name==="NotAllowedError"?"izin verilmedi":e.name==="NotFoundError"?"kamera bulunamadı":e.message),1); return; }
@@ -1107,18 +1111,36 @@ class Kamera{
     this.v.srcObject=this.akis; await this.v.play().catch(()=>{});
     $(".bos",this.kap).style.display="none"; this.camEl.classList.add("acik"); AKTIF_KAMERA=this; this.calisiyor=true;
     this.durum("Barkodu çerçeveye tutun"); this.listele();
-    const tr=this.akis.getVideoTracks()[0]; try{ const c=tr.getCapabilities&&tr.getCapabilities(); if(c&&c.focusMode&&c.focusMode.includes("continuous")) tr.applyConstraints({advanced:[{focusMode:"continuous"}]}); }catch(_){}
+    const tr=this.akis.getVideoTracks()[0]; this.iz=tr; this.ayarlar();
     Barkod.hazirla(); this.dongu();
   }
   kapat(sessiz){ this.calisiyor=false; if(this.akis){ this.akis.getTracks().forEach(t=>t.stop()); this.akis=null; }
     if(this.v) this.v.srcObject=null; if(this.camEl){ this.camEl.classList.remove("acik"); $(".bos",this.kap).style.display=""; this.durum(""); }
     if(AKTIF_KAMERA===this) AKTIF_KAMERA=null; }
+  /* odak, yakınlaştırma, fener: telefon destekliyorsa */
+  ayarlar(){
+    const tr=this.iz; let c={}; try{ c=(tr.getCapabilities&&tr.getCapabilities())||{}; }catch(_){}
+    const adv={}; if(c.focusMode&&c.focusMode.includes("continuous")) adv.focusMode="continuous";
+    // 2 kat yakınlaştırma: telefonu 15-20 cm uzakta tutunca barkod net ve büyük görünür
+    if(c.zoom&&c.zoom.max>=1.5){ adv.zoom=Math.min(2,c.zoom.max); }
+    if(Object.keys(adv).length) tr.applyConstraints({advanced:[adv]}).catch(()=>{});
+    let bar=$(".kAyar",this.kap); if(!bar){ bar=document.createElement("div"); bar.className="cam-bar kAyar"; $(".canli",this.kap).insertBefore(bar,$(".canli .cam-bar",this.kap).nextSibling); }
+    bar.innerHTML=(c.zoom&&c.zoom.max>1?`<label class="small" style="flex:1;display:flex;align-items:center;gap:6px">🔍<input type="range" class="kZoom" min="${c.zoom.min||1}" max="${Math.min(c.zoom.max,5)}" step="0.1" value="${adv.zoom||1}" style="flex:1"></label>`:"")+(c.torch?`<button class="btn sm kFener">🔦 Işık</button>`:"")+`<span class="small muted" style="width:100%">Netleşmezse ekrana dokunun · telefonu 15–20 cm uzakta tutun</span>`;
+    const z=$(".kZoom",bar); if(z) z.oninput=()=>tr.applyConstraints({advanced:[{zoom:+z.value}]}).catch(()=>{});
+    const f=$(".kFener",bar); if(f){ let ac=false; f.onclick=()=>{ ac=!ac; tr.applyConstraints({advanced:[{torch:ac}]}).catch(()=>{}); f.classList.toggle("primary",ac); }; }
+    // dokununca yeniden odakla
+    this.v.onclick=()=>{ if(c.focusMode&&c.focusMode.includes("single-shot")){ tr.applyConstraints({advanced:[{focusMode:"single-shot"}]}).then(()=>setTimeout(()=>{ if(c.focusMode.includes("continuous")) tr.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{}); },1200)).catch(()=>{}); this.durum("Odaklanıyor…"); } };
+  }
+  // çerçevenin ortasındaki bölgeyi tam çözünürlükte kes (barkod daha çok piksel kaplar)
+  orta(){ const v=this.v; if(!v.videoWidth) return null; const w=v.videoWidth, h=v.videoHeight; const cw=Math.round(w*.8), ch=Math.round(h*.6); const k=Math.min(1,1600/cw);
+    const c=document.createElement("canvas"); c.width=Math.round(cw*k); c.height=Math.round(ch*k); c.getContext("2d").drawImage(v,(w-cw)/2,(h-ch)/2,cw,ch,0,0,c.width,c.height); return c; }
   kare(maks){ const v=this.v; if(!v.videoWidth) return null; const s=maks?Math.min(1,maks/Math.max(v.videoWidth,v.videoHeight)):1;
     const c=document.createElement("canvas"); c.width=Math.round(v.videoWidth*s); c.height=Math.round(v.videoHeight*s); c.getContext("2d").drawImage(v,0,0,c.width,c.height); return c; }
   async dongu(){
     while(this.calisiyor){
       const t0=performance.now();
-      try{ const c=this.kare(1280); if(c){ const id=c.getContext("2d").getImageData(0,0,c.width,c.height); const r=await Barkod.oku(id,true); if(r.length) this.sonuc(r); } }catch(e){ console.warn(e); }
+      this._n=(this._n||0)+1;
+      try{ const c=this._n%2?this.orta():this.kare(1280); if(c){ const id=c.getContext("2d").getImageData(0,0,c.width,c.height); const r=await Barkod.oku(id,this._n%3!==0); if(r.length) this.sonuc(r); } }catch(e){ console.warn(e); }
       await new Promise(r=>setTimeout(r,Math.max(40,140-(performance.now()-t0))));
     }
   }

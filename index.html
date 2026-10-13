@@ -1873,11 +1873,12 @@ async function sySktFoto(barkod){
     if(!skt){ const tm=await TarihMotoru.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=tm&&tm.R&&tm.R.skt||""; ut=ut||(tm&&tm.R&&tm.R.ut)||""; }
   }catch(e){ console.warn(e); }
   if(skt && ut && skt<=ut) skt=""; // üretim tarihi STT sanılmasın
+  let gecmis=""; if(skt && gunFark(skt)<-60){ gecmis=skt; skt=""; } // 2027 → 2020 gibi yanlış okuma: çok eski tarih kabul edilmez
   if(V.aktifSayim!==s) return;
   s.fotolar=s.fotolar||{};
   if(skt && ut){ s.ureTar=s.ureTar||{}; s.ureTar[barkod+"|"+skt]=ut; }
   if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); syHedefSec(barkod,sySktAnahtar(barkod,skt)); bip(); yaz("✅ STT/TETT: <b>"+trTarih(skt)+"</b>"+(ut?" · Üretim: <b>"+trTarih(ut)+"</b>":"")+". Yanlışsa doğru tarihe dokunun ya da yazın."); }
-  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz((ut?"Yalnız <b>üretim tarihi ("+trTarih(ut)+")</b> okunabildi, STT/TETT okunamadı. ":"Resim kaydedildi ama tarih okunamadı. ")+"STT/TETT'yi yazın (örn. 190127) ya da tarihe dokunun. İsterseniz yalnız STT/TETT yazan yeri yakından çekin."); SY.bekleyenFoto={barkod,fotoId}; }
+  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz((gecmis?"Okunan tarih <b>"+trTarih(gecmis)+"</b> çok eski, yanlış okunmuş olabilir. ":ut?"Yalnız <b>üretim tarihi ("+trTarih(ut)+")</b> okunabildi, STT/TETT okunamadı. ":"Resim kaydedildi ama tarih okunamadı. ")+"STT/TETT'yi yazın (örn. 190127) ya da tarihe dokunun. İsterseniz yalnız STT/TETT yazan yeri yakından çekin."); SY.bekleyenFoto={barkod,fotoId}; }
 }
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;
@@ -1961,7 +1962,7 @@ function sySonCiz(){
     ${adim(3,!!skt,"STT / TETT",`<div style="margin-top:4px"><button class="btn ${skt?"sm":"gold"}" id="sySktFoto">📸 ${skt?"Tarihin resmini yeniden çek":"Tarihin resmini çek"}</button>${sktFoto?' <span class="small">resim kaydedildi ✓</span>':""}</div>
       <div class="small muted" id="sySktDur" style="margin-top:4px">${skt?"Seçili tarih: <b>"+trTarih(skt)+"</b>":"Resmi çekince tarih okunur. Okunamazsa aşağıdan seçin ya da yazın."}</div>
       <div class="skt-chips">${[...sec].map(([id,t])=>chip(id,(t?trTarih(t):"tarihsiz")+(id.startsWith("yeni:")?" (yeni)":""))).join("")}</div>
-      <div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><input id="syTarihYaz" inputmode="numeric" maxlength="10" placeholder="Tarihi yaz: 190127" style="max-width:190px;font-size:16px"></div>`)}
+      <div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><input id="syTarihYaz" inputmode="numeric" maxlength="10" placeholder="Tarihi yaz: 190127 ya da 19012027" style="max-width:190px;font-size:16px"></div>`)}
     ${adim(4,!!x,"Adet",`<div class="inrow" style="margin-top:4px;align-items:center"><button class="btn" id="syEksi">−1</button><input id="sySay" type="number" step="any" value="${x?x.miktar:0}" style="text-align:center;font-weight:800;font-size:20px"><button class="btn" id="syArti">+1</button><span class="small" style="white-space:nowrap">${esc(u.birim)}</span></div>
       ${u.koliAdet>1?`<div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><button class="btn sm" id="syKoliEksi">−1 koli</button><button class="btn sm primary" id="syKoliArti">+1 koli (${nf(u.koliAdet)} ${esc(u.birim)})</button><span class="small muted">${x&&koliMetin(u,x.miktar)?esc(koliMetin(u,x.miktar)):""}</span></div>`:`<div class="small muted" style="margin-top:6px"><a href="#" id="syKoliTanim">Koli ile saymak için kolide kaç ${esc(u.birim)} olduğunu yazın</a></div>`}
       <div class="small muted" style="margin-top:4px">Sistemde: ${miktarYaz(u,stokOf(barkod,s.kres))} · Sayılan: ${nf(syUrunSayilan(s,barkod))}</div>`)}
@@ -1972,7 +1973,13 @@ function sySonCiz(){
   $("#syGorsel").onclick=async()=>{ if(await urunGorselDegistir(barkod,true)) sySonCiz(); };
   const ah=$("#syAdHizli"); if(ah){ const kay=()=>{ const v=ah.value.trim(); if(!v) return; const uu=V.urunler[barkod]; if(!uu) return; uu.ad=v; uu.tanimsiz=false; kaydet(); urunListesiGuncelle(); syCiz(); toast("Ad kaydedildi"); }; ah.onchange=kay; ah.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); kay(); } }; }
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
-  const ty=$("#syTarihYaz"); ty.oninput=()=>{ const d=ty.value.replace(/\D/g,""); let t=null; if(d.length===6) t=tarihGecerli(+d.slice(4,6),+d.slice(2,4),+d.slice(0,2)); else if(d.length===8) t=tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)); if(t){ syHedefSec(barkod,sySktAnahtar(barkod,t)); toast("Tarih: "+trTarih(t)); } };
+  // 190127 ya da 19012027 ya da 19.01.2027: 4 haneli yıl yazılırken yarıda (1901 20 → 2020) kapanmasın diye geçmiş yıl 6 hanede beklenir
+  const ty=$("#syTarihYaz"); const tUygula=t=>{ ty.onblur=null; ty.oninput=null; ty.value=""; setTimeout(()=>{ syHedefSec(barkod,sySktAnahtar(barkod,t)); toast("Tarih: "+trTarih(t)); }); };
+  const tCoz=(tam)=>{ const d=ty.value.replace(/\D/g,""); const yil=new Date().getFullYear();
+    if(d.length===8){ const t=tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)); if(t){ tUygula(t); return; } }
+    if(d.length===6){ const y=2000+(+d.slice(4,6)); const t=tarihGecerli(y,+d.slice(2,4),+d.slice(0,2)); if(t && (y>=yil-1 || tam)){ tUygula(t); return; } }
+    if(tam && d.length) toast("Tarih anlaşılamadı. Örnek: 190127 ya da 19012027",1); };
+  ty.oninput=()=>tCoz(false); ty.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); tCoz(true); } }; ty.onblur=()=>{ if(ty.isConnected && ty.value) tCoz(true); };
   $("#sySktFoto").onclick=()=>sySktFoto(barkod);
   $("#syEksi").onclick=()=>syEkle(barkod,lotId,-1); $("#syArti").onclick=()=>syEkle(barkod,lotId,1,true);
   const ka=$("#syKoliArti"); if(ka){ ka.onclick=()=>syEkle(barkod,lotId,+u.koliAdet,true); $("#syKoliEksi").onclick=()=>syEkle(barkod,lotId,-u.koliAdet); }

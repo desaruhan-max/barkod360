@@ -1943,7 +1943,7 @@ async function syEtiketOku(barkod, hazirDosya, sessiz){
   try{
     const {R,c}=await ClaudeOkur.urunFotoOku(f,ilerle); const u=V.urunler[barkod]; if(!u) return; const yaz=[];
     // elle "Etiketi Claude'a okut" denince arka etiketteki daha tam ad öncekinin yerine geçer
-    if(R.ad && (u.tanimsiz||!u.ad||(!sessiz && R.ad!==u.ad))){ const eski=u.tanimsiz?"":u.ad; u.ad=R.ad; u.tanimsiz=false; yaz.push(eski?"ad ("+eski+" → "+R.ad+")":"ad"); }
+    if(R.ad && (u.tanimsiz||!u.ad||((!sessiz||!u.uretici) && R.ad!==u.ad))){ const eski=u.tanimsiz?"":u.ad; u.ad=R.ad; u.tanimsiz=false; yaz.push(eski?"ad ("+eski+" → "+R.ad+")":"ad"); }
     const al=(k,v,et)=>{ if(v && !u[k]){ u[k]=v; yaz.push(et); } };
     al("marka",R.marka,"marka"); al("net",R.net,"miktar"); al("uretici",R.uretici,"üretici"); al("adres",R.adres,"adres"); al("isletme",R.isletme,"işletme no"); al("mensei",R.mensei,"menşei"); al("icerik",R.icerik,"içindekiler");
     if(R.saklama && (!u.saklama||u.saklama==="oda") && R.saklama!=="oda"){ u.saklama=R.saklama; yaz.push("saklama"); }
@@ -1966,7 +1966,7 @@ function sySonCiz(){
   const adim=(no,ok,baslik,ic)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:${ok?"#2e8f6f":"#9aa5a0"}">${ok?"✓":no}</div><div style="flex:1;min-width:0"><div style="font-weight:800">${baslik}</div>${ic}</div></div>`;
   e.innerHTML=`<div class="sonuc">
     ${adim(1,!u.tanimsiz,u.tanimsiz?"Ürünün adını yazın":"Barkod okundu",u.tanimsiz?`<div class="small" style="color:#b45309;font-weight:700">Bu barkod tanınmadı. Ad olmazsa sonradan hangi ürün olduğu bilinmez.</div><input id="syAdHizli" placeholder="Örn. Oba tel şehriye 5 kg" style="width:100%;font-size:17px;margin-top:4px"><div class="small muted">Yazıp klavyede Tamam'a basın.</div>`:`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
-    ${adim(2,!!u.gorselId,"Ürünün resmi",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId?"Yeniden çek":"Ürünün resmini çek"}</button></div><div class="small muted" id="syAdDur">${u.tanimsiz?"Resmi çekince adı Claude okur (anahtar varsa).":""}</div>`)}
+    ${adim(2,!!u.gorselId&&!!u.uretici,"Etiketin resmi (arka yüz)",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId&&u.uretici?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId&&u.uretici?"Yeniden çek":"Etiketin resmini çek"}</button></div><div class="small muted" id="syAdDur">${u.uretici?"":"Ürün adı, içindekiler ve üreticinin yazdığı yüzü çekin. Claude bütün bilgileri kendisi doldurur; siz bir şey yazmazsınız."}</div>`)}
     ${adim(3,!!skt,"STT / TETT",`<div style="margin-top:4px"><button class="btn ${skt?"sm":"gold"}" id="sySktFoto">📸 ${skt?"Tarihin resmini yeniden çek":"Tarihin resmini çek"}</button>${sktFoto?' <span class="small">resim kaydedildi ✓</span>':""}</div>
       <div class="small muted" id="sySktDur" style="margin-top:4px">${skt?"Seçili tarih: <b>"+trTarih(skt)+"</b>":"Resmi çekince tarih okunur. Okunamazsa aşağıdan seçin ya da yazın."}</div>
       <div class="skt-chips">${[...sec].map(([id,t])=>chip(id,(t?trTarih(t):"tarihsiz")+(id.startsWith("yeni:")?" (yeni)":""))).join("")}</div>
@@ -1980,7 +1980,7 @@ function sySonCiz(){
   $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
   $("#syGorsel").onclick=async()=>{ const f=await gorselSec(true); if(!f) return; const uu=V.urunler[barkod]; if(!uu) return;
     try{ uu.gorselId=await gorselKaydet(f); kaydet(); }catch(e){ toast("Resim kaydedilemedi: "+e.message,1); return; }
-    sySonCiz(); if(uu.tanimsiz||!uu.marka||!uu.net){ const e2=$("#syAdDur"); if(e2) e2.textContent="⏳ Claude ürünün adını okuyor…"; syEtiketOku(barkod,f,true); } };
+    sySonCiz(); if(uu.tanimsiz||!uu.marka||!uu.net||!uu.uretici){ const e2=$("#syAdDur"); if(e2) e2.textContent="⏳ Claude ürünün adını okuyor…"; syEtiketOku(barkod,f,true); } };
   const ah=$("#syAdHizli"); if(ah){ const kay=()=>{ const v=ah.value.trim(); if(!v) return; const uu=V.urunler[barkod]; if(!uu) return; uu.ad=v; uu.tanimsiz=false; kaydet(); urunListesiGuncelle(); syCiz(); toast("Ad kaydedildi"); }; ah.onchange=kay; ah.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); kay(); } }; }
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
   // 190127 ya da 19012027 ya da 19.01.2027: 4 haneli yıl yazılırken yarıda (1901 20 → 2020) kapanmasın diye geçmiş yıl 6 hanede beklenir

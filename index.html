@@ -1803,7 +1803,7 @@ function sySonCiz(){
     <div style="display:flex;gap:10px;align-items:flex-start"><img data-g="${esc(barkod)}" alt="" style="display:none;width:72px;height:72px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden">
       <div style="flex:1;min-width:0"><div class="small muted">Son okutulan</div><div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div>
       <div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>
-      <div class="inrow" style="gap:6px;margin-top:4px;flex-wrap:wrap"><button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button>${u.gorselId?"":'<button class="btn sm" id="syGorsel">📷 Ürün görseli çek</button>'}</div></div></div>
+      <div class="inrow" style="gap:6px;margin-top:4px;flex-wrap:wrap">${u.tanimsiz?'<button class="btn sm primary" id="syAdYaz">✎ Adını yaz</button>':'<button class="btn sm" id="syAdYaz">✎ Düzenle</button>'}<button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button>${u.gorselId?"":'<button class="btn sm" id="syGorsel">📷 Ürün görseli çek</button>'}</div></div></div>
     <div class="small" style="font-weight:700;margin-top:10px">Bu ürünün STT / TETT'si hangisi?</div>
     <div class="skt-chips">${[...sec].map(([id,skt])=>chip(id,(skt?trTarih(skt):"tarihsiz")+(id.startsWith("yeni:")?" (yeni)":""))).join("")}${chip(null,"Tarih bilinmiyor")}</div>
     <div class="inrow" style="margin-top:8px;gap:6px;flex-wrap:wrap;align-items:center"><input type="date" id="sySktYeni" style="max-width:170px"><button class="btn sm" id="sySktEkle">+ Yeni tarih ekle</button><button class="btn sm gold" id="sySktFoto">📸 Tarihin fotoğrafı</button></div>
@@ -1811,7 +1811,7 @@ function sySonCiz(){
     <div class="inrow" style="margin-top:10px;align-items:center"><button class="btn" id="syEksi">−1</button><input id="sySay" type="number" step="any" value="${x?x.miktar:0}" style="text-align:center;font-weight:800;font-size:18px"><button class="btn" id="syArti">+1</button><span class="small" style="white-space:nowrap">${esc(u.birim)}</span></div>
     <div class="small muted" style="margin-top:4px">${lotId?"Bu tarihte sayılan":"Tarihsiz sayılan"} · Sistemde toplam: ${nf(stokOf(barkod,s.kres))} ${esc(u.birim)} · Sayılan toplam: ${nf(syUrunSayilan(s,barkod))}</div></div>`;
   gorselYukle(e);
-  $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres);
+  $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
   const g=$("#syGorsel"); if(g) g.onclick=async()=>{ if(await urunGorselDegistir(barkod,true)) sySonCiz(); };
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
   $("#sySktEkle").onclick=()=>{ const t=$("#sySktYeni").value; if(!t){ toast("Önce tarihi seçin",1); return; } syHedefSec(barkod,sySktAnahtar(barkod,t)); };
@@ -1819,12 +1819,24 @@ function sySonCiz(){
   $("#syEksi").onclick=()=>syEkle(barkod,lotId,-1); $("#syArti").onclick=()=>syEkle(barkod,lotId,1,true);
   $("#sySay").onchange=ev=>{ const yeni=+ev.target.value||0; const eski=x?x.miktar:0; syEkle(barkod,lotId,yuvarla(yeni-eski)); };
 }
+// Sayımdan bir ürünü tamamen çıkar; sayımda açılmış adsız kart başka yerde kullanılmıyorsa o da silinir
+async function syCikar(barkod){
+  const s=V.aktifSayim; const u=V.urunler[barkod]||{ad:barkod};
+  if(!await onayla("<b>"+esc(u.ad)+"</b> bu sayımdan çıkarılsın mı? (Sayılan "+nf(syUrunSayilan(s,barkod))+" "+esc(u.birim||"")+" silinir.)","Sayımdan çıkar")) return;
+  for(const k of Object.keys(s.sayilan)) if(s.sayilan[k].barkod===barkod) delete s.sayilan[k];
+  s.log.push({t:new Date().toISOString(),barkod,cikarildi:true});
+  if(u.tanimsiz && !Object.values(V.lotlar).some(l=>l.barkod===barkod)){ delete V.urunler[barkod]; urunListesiGuncelle(); }
+  if(SY.son && SY.son.barkod===barkod) SY.son=null; if(SY.grup && SY.grup.barkod===barkod) SY.grup=null; if(SY.hedef) delete SY.hedef[barkod];
+  kaydet(); syCiz(); toast("Sayımdan çıkarıldı");
+}
 function syTablo(){
   const s=V.aktifSayim; if(!$("#syTablo")) return; let r=sySatirlar();
   const okut=r.filter(x=>x.okutuldu).length; const fk=r.filter(x=>x.okutuldu&&x.fark).length;
   $("#syOzet").textContent=`${okut} / ${r.length} ürün okutuldu · ${fk} farklı`;
   if(SY.sadeceFark) r=r.filter(x=>x.okutuldu&&x.fark); if(SY.ara){ const t=katla(SY.ara); r=r.filter(x=>katla(x.u.ad+" "+(x.u.marka||"")+" "+x.b).includes(t)); }
-  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}</td><td class="r">${nf(x.sis)}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b></td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act"><button class="ib" data-elle="${esc(x.b)}" title="Elle say">✎</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
+  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}</td><td class="r">${nf(x.sis)}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b></td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-duz="${esc(x.b)}">${x.u.tanimsiz?"✎ Adını yaz":"✎ Düzenle"}</button> ${x.okutuldu?`<button class="btn sm danger" data-cikar="${esc(x.b)}">🗑 Sil</button>`:`<button class="btn sm" data-elle="${esc(x.b)}">Say</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
+  $$("#syTablo [data-duz]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); urunDuzenle(b.dataset.duz); });
+  $$("#syTablo [data-cikar]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); syCikar(b.dataset.cikar); });
   $$("#syTablo [data-elle]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); SY.son={barkod:b.dataset.elle,lotId:null}; if(!s.sayilan[b.dataset.elle]) s.sayilan[b.dataset.elle]={barkod:b.dataset.elle,lotId:null,miktar:0}; sySonCiz(); syTablo(); const i=$("#sySay"); i&&i.select(); });
 }
 async function syBitir(){
@@ -2021,10 +2033,10 @@ function urunDuzenle(kod, yeni){
     <label class="f w2" style="grid-column:1/-1">İçindekiler<textarea id="ue_icerik" rows="3">${esc(u.icerik||"")}</textarea></label>${f("acilis","Açıldıktan sonra (gün)",u.acilis,'type="number" min="0"')}${f("min","Asgari stok",u.min,'type="number" min="0" step="any"')}</div>
     <div class="small muted" style="font-weight:600">Alerjenler</div><div class="chips al" id="ue_al">${ALERJENLER.map(a=>`<button data-a="${esc(a)}" class="${(u.alerjen||[]).includes(a)?"on":""}">${esc(a)}</button>`).join("")}</div>
     ${yeni?'<p class="hint">Bu iç kod (20… ile başlar) yalnızca kurum içinde geçerlidir. "Etiket Bas"tan barkodunu basıp ürünün kabına yapıştırabilirsiniz.</p>':""}`,
-    [ ...(yeni||Object.values(V.lotlar).some(l=>l.barkod===kod)?[]:[{t:"Kartı sil",c:"danger",f:async()=>{ if(await onayla("Ürün kartı silinsin mi?","Sil")){ delete V.urunler[kod]; kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); } }}]),
+    [ ...(yeni||Object.values(V.lotlar).some(l=>l.barkod===kod)?[]:[{t:"Kartı sil",c:"danger",f:async()=>{ if(await onayla("Ürün kartı silinsin mi?","Sil")){ delete V.urunler[kod]; const sa=V.aktifSayim; if(sa){ for(const k of Object.keys(sa.sayilan)) if(sa.sayilan[k].barkod===kod) delete sa.sayilan[k]; if(SY.son&&SY.son.barkod===kod) SY.son=null; } kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(sa && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı silindi"); } }}]),
       {t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const ad=$("#ue_ad").value.trim(); if(!ad){ toast("Ürün adı gerekli",1); return false; }
       V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),icerik:$("#ue_icerik").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
-      kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); toast("Ürün kartı kaydedildi"); }}], true);
+      kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(V.aktifSayim && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı kaydedildi"); }}], true);
   selDoldur($("#ue_grup",b),GRUPLAR,u.grup); selDoldur($("#ue_birim",b),BIRIMLER,u.birim); selDoldur($("#ue_saklama",b),Object.entries(SAKLAMA),u.saklama);
   $("#ue_al",b).onclick=e=>{ const x=e.target.closest("button"); if(x) x.classList.toggle("on"); };
 }

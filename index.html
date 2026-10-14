@@ -1858,6 +1858,7 @@ function syBarkod(a){
   if(!a.foto && SY.sonOkuma && SY.sonOkuma.kod===kod && simdi-SY.sonOkuma.t<4000){ SY.sonOkuma.t=simdi; return; }
   SY.sonOkuma={kod,t:simdi};
   let u=urunBul(a.gtin); if(!u && a.tartili) u=urunBul(a.tartili.kod);
+  if(!u){ const ku=syKoliGtin(a.gtin); if(ku){ syKoliBagla(ku,a.gtin,()=>syBarkod(Object.assign({},a,{foto:true}))); return; } }
   if(!u){ const b=syBenzer(a.gtin);
     if(b){ dlg("Barkod yanlış okunmuş olabilir",`<p>Okunan barkod <b>${esc(a.gtin)}</b> kayıtlı değil, ama <b>${esc(b.barkod)}</b> (<b>${esc(b.ad)}</b>) barkoduna çok benziyor. Kamera bir iki rakamı yanlış okumuş olabilir.</p><p>Okuttuğunuz ürün bu mu?</p>`,
         [{t:"Hayır, yeni ürün",f:()=>{ setTimeout(()=>syYeniUrun(a),30); }},{t:"Evet, "+b.ad,c:"primary",f:()=>{ setTimeout(()=>syBarkod(Object.assign({},a,{gtin:b.barkod,foto:true})),30); }}]); return; }
@@ -1961,6 +1962,26 @@ async function sySktFoto(barkod){
 function syBenzer(kod){ if(!kod) return null; let en=null, ef=9;
   for(const b in V.urunler){ const u=V.urunler[b]; if(u.tanimsiz||b.length!==kod.length) continue; let f=0; for(let i=0;i<b.length&&f<=2;i++) if(b[i]!==kod[i]) f++; if(f<=2&&f<ef){ ef=f; en=u; } }
   return en; }
+// GTIN-14 koli barkodu: 1-8 ile başlar, içinde tek ürünün barkodu gömülüdür (1 8690158120716 x)
+function syKoliGtin(kod){ if(!/^[1-8]\d{13}$/.test(kod||"")) return null; const g12=kod.slice(1,13); const u=V.urunler[g12+kontrolHanesi(g12)]; return u&&!u.tanimsiz?u:null; }
+// koli barkodunu bir ürüne bağla ve kolide kaç adet olduğunu sor (bir kez)
+function syKoliBagla(u, koliKod, sonra){
+  const b=dlg("Koli barkodu: "+esc(u.ad),`<p>Bu barkod <b>${esc(u.ad)}</b> ürününün <b>kolisine</b> ait. Bir kez tanıtınca, koliyi okuttuğunuzda program bir koli kadar sayar.</p><label class="f">Kolide kaç ${esc(u.birim||"adet")} var?<input id="kbKoliAdet" type="number" min="1" step="1" inputmode="numeric" value="${u.koliAdet>1?u.koliAdet:""}" placeholder="Örn. 12" style="font-size:20px"></label>`,
+    [{t:"Vazgeç"},{t:"Kaydet ve say",c:"primary",f:()=>{ const n=+$("#kbKoliAdet").value; if(!(n>=1)){ toast("Koli içi adedi yazın",1); return false; } u.koliAdet=n; u.koliBarkod=koliKod; kaydet(); urunListesiGuncelle(); toast("Koli barkodu tanıtıldı: 1 koli = "+n+" "+(u.birim||"adet")); setTimeout(sonra,30); }}]);
+  setTimeout(()=>{ const i=$("#kbKoliAdet",b); i&&i.focus(); },60);
+}
+// sayımda adsız açılmış bir barkodun aslında bir ürünün KOLİ barkodu olduğunu söyle: sayılanlar o ürüne koli olarak taşınır
+function syKoliOlarakTani(koliKod){
+  const s=V.aktifSayim; const urunler=Object.values(V.urunler).filter(u=>!u.tanimsiz&&u.barkod!==koliKod).sort((a,b)=>a.ad.localeCompare(b.ad,"tr"));
+  if(!urunler.length){ toast("Önce ürünün kendisini (tek paketin barkodunu) okutup tanıtın",1); return; }
+  const b=dlg("Bu bir koli barkodu",`<p>Okuttuğunuz <b>${esc(koliKod)}</b> hangi ürünün kolisi?</p><label class="f">Ürün<select id="kkUrun" style="font-size:16px">${urunler.map(u=>`<option value="${esc(u.barkod)}">${esc(u.ad)}${u.marka?" · "+esc(u.marka):""}</option>`).join("")}</select></label><label class="f">Kolide kaç adet var?<input id="kkAdet" type="number" min="1" step="1" inputmode="numeric" placeholder="Örn. 12" style="font-size:20px"></label>`,
+    [{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const hedef=V.urunler[$("#kkUrun").value]; const n=+$("#kkAdet").value; if(!hedef){ return false; } if(!(n>=1)){ toast("Koli içi adedi yazın",1); return false; }
+      hedef.koliAdet=n; hedef.koliBarkod=koliKod;
+      // adsız kartta sayılan her okutma = 1 koli → hedef ürüne n adet olarak taşı
+      for(const k of Object.keys(s.sayilan)){ const y=s.sayilan[k]; if(y.barkod!==koliKod) continue; const lot=y.lotId&&y.lotId.startsWith("yeni:")?y.lotId:null; delete s.sayilan[k]; const hk=syAnahtar(hedef.barkod,lot); const h=s.sayilan[hk]||(s.sayilan[hk]={barkod:hedef.barkod,lotId:lot,miktar:0}); h.miktar=yuvarla(h.miktar+y.miktar*n); }
+      const eski=V.urunler[koliKod]; if(eski&&eski.tanimsiz&&!Object.values(V.lotlar).some(l=>l.barkod===koliKod)) delete V.urunler[koliKod];
+      SY.son={barkod:hedef.barkod,lotId:SY.hedef&&SY.hedef[hedef.barkod]||null}; kaydet(); urunListesiGuncelle(); syCiz(); toast("Koli barkodu "+hedef.ad+" ürününe bağlandı"); }}]);
+}
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;
   V.urunler[kod]={barkod:kod, ad:"❓ Adı girilmemiş ürün · "+kod, tanimsiz:true, marka:"", grup:GRUPLAR[0], birim:a.tartili?"kg":"adet", saklama:"oda", alerjen:[], olusturma:new Date().toISOString(), son:{}};
@@ -2040,7 +2061,7 @@ function sySonCiz(){
   const skt=syLotSkt(lotId); const sktFoto=(s.fotolar||{})[barkod+"|"+skt];
   const adim=(no,ok,baslik,ic)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:${ok?"#2e8f6f":"#9aa5a0"}">${ok?"✓":no}</div><div style="flex:1;min-width:0"><div style="font-weight:800">${baslik}</div>${ic}</div></div>`;
   e.innerHTML=`<div class="sonuc">
-    ${adim(1,!u.tanimsiz,u.tanimsiz?"Ürünün adını yazın":"Barkod okundu",u.tanimsiz?`<div class="small" style="color:#b45309;font-weight:700">Bu barkod tanınmadı. Ad olmazsa sonradan hangi ürün olduğu bilinmez.</div><input id="syAdHizli" placeholder="Örn. Oba tel şehriye 5 kg" style="width:100%;font-size:17px;margin-top:4px"><div class="small muted">Yazıp klavyede Tamam'a basın.</div>`:`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
+    ${adim(1,!u.tanimsiz,u.tanimsiz?"Ürünün adını yazın":"Barkod okundu",u.tanimsiz?`<div class="small" style="color:#b45309;font-weight:700">Bu barkod tanınmadı. Ad olmazsa sonradan hangi ürün olduğu bilinmez.</div><input id="syAdHizli" placeholder="Örn. Oba tel şehriye 5 kg" style="width:100%;font-size:17px;margin-top:4px"><div class="small muted">Yazıp klavyede Tamam'a basın.</div><button class="btn sm gold" id="syKoliMi" style="margin-top:6px">📦 Bu bir koli barkodu (ürün kayıtlı)</button>`:`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
     ${adim(2,!!u.gorselId&&!!u.uretici,"Etiketin resmi (arka yüz)",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId&&u.uretici?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId&&u.uretici?"Yeniden çek":"Etiketin resmini çek"}</button></div><div class="small muted" id="syAdDur">${u.uretici?"":"Ürün adı, içindekiler ve üreticinin yazdığı yüzü çekin. Claude bütün bilgileri kendisi doldurur; siz bir şey yazmazsınız."}</div>`)}
     ${adim(3,!!skt,"STT / TETT",`<div style="margin-top:4px"><button class="btn ${skt?"sm":"gold"}" id="sySktFoto">📸 ${skt?"Tarihin resmini yeniden çek":"Tarihin resmini çek"}</button>${sktFoto?' <span class="small">resim kaydedildi ✓</span>':""}</div>
       <div class="small muted" id="sySktDur" style="margin-top:4px">${skt?"Seçili tarih: <b>"+trTarih(skt)+"</b>":"Resmi çekince tarih okunur. Okunamazsa aşağıdan seçin ya da yazın."}</div>
@@ -2056,6 +2077,7 @@ function sySonCiz(){
   $("#syGorsel").onclick=async()=>{ const f=await gorselSec(true); if(!f) return; const uu=V.urunler[barkod]; if(!uu) return;
     try{ uu.gorselId=await gorselKaydet(f); kaydet(); }catch(e){ toast("Resim kaydedilemedi: "+e.message,1); return; }
     sySonCiz(); if(uu.tanimsiz||!uu.marka||!uu.net||!uu.uretici){ const e2=$("#syAdDur"); if(e2) e2.textContent="⏳ Claude ürünün adını okuyor…"; syEtiketOku(barkod,f,true); } };
+  const km=$("#syKoliMi"); if(km) km.onclick=()=>syKoliOlarakTani(barkod);
   const ah=$("#syAdHizli"); if(ah){ const kay=()=>{ const v=ah.value.trim(); if(!v) return; const uu=V.urunler[barkod]; if(!uu) return; uu.ad=v; uu.tanimsiz=false; kaydet(); urunListesiGuncelle(); syCiz(); toast("Ad kaydedildi"); }; ah.onchange=kay; ah.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); kay(); } }; }
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
   // 190127 ya da 19012027 ya da 19.01.2027: 4 haneli yıl yazılırken yarıda (1901 20 → 2020) kapanmasın diye geçmiş yıl 6 hanede beklenir

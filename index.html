@@ -611,6 +611,8 @@ const pad = n => String(n).padStart(2,"0");
 function bugun(){ const d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function simdiSaat(){ const d=new Date(); return pad(d.getHours())+":"+pad(d.getMinutes()); }
 function trTarih(iso){ if(!iso) return ""; const [y,m,d]=iso.slice(0,10).split("-"); return d+"."+m+"."+y; }
+function trTarihSaatSn(iso){ if(!iso) return ""; const d=new Date(iso); return pad(d.getDate())+"."+pad(d.getMonth()+1)+"."+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds()); }
+function saatSn(iso){ if(!iso) return ""; const d=new Date(iso); return pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds()); }
 function trTarihSaat(iso){ if(!iso) return ""; const d=new Date(iso); return pad(d.getDate())+"."+pad(d.getMonth()+1)+"."+d.getFullYear()+" "+pad(d.getHours())+":"+pad(d.getMinutes()); }
 function gunFark(iso){ if(!iso) return null; const a=new Date(iso.slice(0,10)+"T00:00:00"), b=new Date(bugun()+"T00:00:00"); return Math.round((a-b)/864e5); }
 function gunEkle(iso,n){ const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
@@ -1872,6 +1874,9 @@ SAYFA.cikis = {
 const SY = {kam:null, son:null, sadeceFark:false, ara:"", hedef:{}, grup:null};
 function syAnahtar(barkod, lotId){ return barkod+(lotId?"|"+lotId:""); }
 function syUrunSayilan(s, barkod){ let t=0; for(const k in s.sayilan){ if(s.sayilan[k].barkod===barkod) t+=s.sayilan[k].miktar; } return yuvarla(t); }
+// sayımdaki her işlemin zamanı (saniyesine kadar): barkod, tarih resmi, etiket resmi
+function syOlay(barkod, olay, ek){ const s=V.aktifSayim; if(!s) return; s.log.push(Object.assign({t:new Date().toISOString(),barkod,olay},ek||{})); }
+function syZaman(s, barkod){ const o={son:"",ilk:"",barkod:[],tarih:[],etiket:[]}; for(const x of s.log||[]){ if(x.barkod!==barkod) continue; if(!o.ilk) o.ilk=x.t; if(x.t>o.son) o.son=x.t; if(x.olay==="barkod") o.barkod.push(x.t); else if(x.olay==="tarihFoto") o.tarih.push(x.t); else if(x.olay==="etiketFoto") o.etiket.push(x.t); } return o; }
 function syBarkod(a){
   const s=V.aktifSayim; if(!s) return;
   // canlı kamerada aynı barkod birkaç saniye içinde tekrar görülürse sayılmaz (bir okutma = 1). Aynı üründen bir tane daha için +1'e basın ya da ürünü değiştirip tekrar okutun.
@@ -1890,6 +1895,7 @@ function syBarkod(a){
   const kc=koliCarpan(a.gtin); const art=a.tartili?a.tartili.kg:(a.adetAI||1)*kc;
   if(kc>1) toast("Koli okutuldu: +"+kc+" "+u.birim);
   if(!SY.son||SY.son.barkod!==u.barkod) SY.fotolar=(SY.fotolar||[]).filter(g=>g.durum.startsWith("⏳"));
+  syOlay(u.barkod,"barkod",{kod:a.gtin});
   SY.tarihAlindi=null; SY.sonArt=art; SY.taraTek=(art===1); SY.taramaKey={barkod:u.barkod,lotId,art};
   syEkle(u.barkod, lotId, art, true);
 }
@@ -1968,7 +1974,7 @@ async function sySktFoto(barkod){
     g.key=syAnahtar(barkod,null); syEkleSessiz(barkod,null,g.art); }
   else g.key=syAnahtar(barkod,tk.lotId);
   g.lotId=ilk?tk.lotId:null;
-  (SY.fotolar=SY.fotolar||[]).push(g); sySonCiz();
+  (SY.fotolar=SY.fotolar||[]).push(g); syOlay(barkod,"tarihFoto",{no:g.no}); sySonCiz();
   let c, fotoId=null;
   try{ const bm=await createImageBitmap(f); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); fotoId=await fotoKaydet(c); }catch(e){ g.durum="Resim açılamadı"; sySonCiz(); return; }
   let skt="", ut="";
@@ -2037,7 +2043,8 @@ function sySatirlar(){
   Object.values(s.sayilan).forEach(x=>bk.add(x.barkod));
   return [...bk].map(b=>{ const u=V.urunler[b]||{ad:b,birim:""}; const sis=stokOf(b,s.kres); const say=syUrunSayilan(s,b); const okutuldu=Object.values(s.sayilan).some(x=>x.barkod===b);
     const fiyat=syFiyat(b,s.kres); return {b,u,sis,say,okutuldu,fark:yuvarla(say-sis),fiyat}; })
-    .sort((a,b)=>(b.okutuldu-a.okutuldu)||a.u.ad.localeCompare(b.u.ad,"tr"));
+    .map(x=>Object.assign(x,{zaman:syZaman(s,x.b)}))
+    .sort((a,b)=>(b.okutuldu-a.okutuldu)||(b.zaman.son||"").localeCompare(a.zaman.son||"")||a.u.ad.localeCompare(b.u.ad,"tr"));
 }
 function syFiyat(b,kres){ const ls=lotlarOf(b,kres).filter(l=>l.fiyat!=null); const ak=ls.filter(l=>kalanOf(l.id)>0);
   const k=ak.length?ak:ls; if(k.length){ const t=k.reduce((a,l)=>a+Math.max(kalanOf(l.id),0),0); return t>0? k.reduce((a,l)=>a+Math.max(kalanOf(l.id),0)*l.fiyat,0)/t : k[k.length-1].fiyat; }
@@ -2070,7 +2077,7 @@ function syCiz(){
 async function syEtiketOku(barkod, hazirDosya, sessiz){
   if(!(await ClaudeOkur.kullanilabilir())){ if(sessiz) return;
     dlg("Claude okuyucu kapalı",`<p>${navigator.onLine?"Fotoğraftan ürün bilgisi okumak için Claude anahtarı gerekiyor.":"İnternet yok. Fotoğraftan okuma internet gelince çalışır."}</p>${navigator.onLine?'<p class="hint">Anahtarı <b>Yedekleme</b> sayfasındaki "Claude okuyucu" kutusuna bir kez yapıştırın.</p>':""}`,[{t:"Kapat"},...(navigator.onLine?[{t:"Yedekleme sayfasına git",c:"primary",f:()=>{ setTimeout(()=>sekme("yedek"),30); }}]:[])]); return; }
-  const f=hazirDosya||await gorselSec(true); if(!f) return;
+  const f=hazirDosya||await gorselSec(true); if(!f) return; if(!hazirDosya) syOlay(barkod,"etiketFoto");
   const d=$("#syAdDur")||$("#sySktDur"); const ilerle=(p,m)=>{ const e=$("#syAdDur")||$("#sySktDur"); if(e&&m) e.textContent="⏳ "+m; };
   try{
     const {R,c}=await ClaudeOkur.urunFotoOku(f,ilerle); const u=V.urunler[barkod]; if(!u) return; const yaz=[];
@@ -2113,7 +2120,7 @@ function sySonCiz(){
   gorselYukle(e);
   $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>syMiktarDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
   $("#syGorsel").onclick=async()=>{ const f=await gorselSec(true); if(!f) return; const uu=V.urunler[barkod]; if(!uu) return;
-    try{ uu.gorselId=await gorselKaydet(f); kaydet(); }catch(e){ toast("Resim kaydedilemedi: "+e.message,1); return; }
+    syOlay(barkod,"etiketFoto"); try{ uu.gorselId=await gorselKaydet(f); kaydet(); }catch(e){ toast("Resim kaydedilemedi: "+e.message,1); return; }
     sySonCiz(); if(uu.tanimsiz||!uu.marka||!uu.net||!uu.uretici){ const e2=$("#syAdDur"); if(e2) e2.textContent="⏳ Claude ürünün adını okuyor…"; syEtiketOku(barkod,f,true); } };
   const km=$("#syKoliMi"); if(km) km.onclick=()=>syKoliOlarakTani(barkod);
   const ah=$("#syAdHizli"); if(ah){ const kay=()=>{ const v=ah.value.trim(); if(!v) return; const uu=V.urunler[barkod]; if(!uu) return; uu.ad=v; uu.tanimsiz=false; kaydet(); urunListesiGuncelle(); syCiz(); toast("Ad kaydedildi"); }; ah.onchange=kay; ah.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); kay(); } }; }
@@ -2161,7 +2168,8 @@ function syMiktarDuzenle(barkod){
     <div class="small" style="font-weight:700;margin:10px 0 4px">STT / TETT ve sayılan miktar <span class="muted" style="font-weight:400">(tarihi de değiştirebilirsiniz: 210728)</span></div>
     <div class="tw"><table class="rt"><thead><tr><th>STT / TETT</th><th class="r">Koli</th><th class="r">Tek</th><th class="r">Toplam</th></tr></thead><tbody id="smGovde">${satir.map(satirHtml).join("")}</tbody></table></div>
     <button type="button" class="btn sm" id="smEkle" style="margin-top:6px">+ Başka tarih ekle</button>
-    <p class="small muted" id="smOzet"></p>`,
+    <p class="small muted" id="smOzet"></p>
+    ${(()=>{ const ol=(s.log||[]).filter(x=>x.barkod===barkod&&x.olay); if(!ol.length) return ""; const ad={barkod:"📷 Barkod okutuldu",tarihFoto:"📸 Tarih resmi",etiketFoto:"🏷 Etiket resmi"}; return `<details style="margin-top:6px"><summary class="small" style="font-weight:700">🕒 İşlem saatleri (${ol.length})</summary><div class="small" style="max-height:180px;overflow:auto;margin-top:4px">${ol.slice().reverse().map(x=>`<div>${trTarihSaatSn(x.t)} — ${ad[x.olay]||x.olay}${x.no?" #"+x.no:""}</div>`).join("")}</div></details>`; })()}`,
     [{t:"Ürün kartı",f:()=>{ setTimeout(()=>urunDuzenle(barkod),30); }},{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{
       const yeniKa=+$("#smKoliAdet",b).value||0; const carp=yeniKa>1?yeniKa:1; const ad=$("#smAd",b).value.trim();
       // önce tarihleri kontrol et
@@ -2199,7 +2207,7 @@ function syTablo(){
   const okut=r.filter(x=>x.okutuldu).length; const fk=r.filter(x=>x.okutuldu&&x.fark).length;
   $("#syOzet").textContent=`${okut} / ${r.length} ürün okutuldu · ${fk} farklı`;
   if(SY.sadeceFark) r=r.filter(x=>x.okutuldu&&x.fark); if(SY.ara){ const t=katla(SY.ara); r=r.filter(x=>katla(x.u.ad+" "+(x.u.marka||"")+" "+x.b).includes(t)); }
-  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}</td><td class="r">${nf(x.sis)}${koliMetin(x.u,x.sis)?'<div class="small muted">'+esc(koliMetin(x.u,x.sis))+"</div>":""}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b>${x.okutuldu&&koliMetin(x.u,x.say)?'<div class="small muted">'+esc(koliMetin(x.u,x.say))+"</div>":""}</td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-duz="${esc(x.b)}">${x.u.tanimsiz?"✎ Adı / miktar":"✎ Düzenle"}</button> ${x.okutuldu?`<button class="btn sm danger" data-cikar="${esc(x.b)}">🗑 Sil</button>`:`<button class="btn sm" data-elle="${esc(x.b)}">Say</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
+  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}${x.okutuldu&&x.zaman.son?`<div class="small muted">🕒 ${trTarihSaatSn(x.zaman.son)}${x.zaman.barkod.length?" · barkod "+x.zaman.barkod.length:""}${x.zaman.tarih.length?" · tarih resmi "+x.zaman.tarih.length:""}${x.zaman.etiket.length?" · etiket "+x.zaman.etiket.length:""}</div>`:""}</td><td class="r">${nf(x.sis)}${koliMetin(x.u,x.sis)?'<div class="small muted">'+esc(koliMetin(x.u,x.sis))+"</div>":""}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b>${x.okutuldu&&koliMetin(x.u,x.say)?'<div class="small muted">'+esc(koliMetin(x.u,x.say))+"</div>":""}</td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-duz="${esc(x.b)}">${x.u.tanimsiz?"✎ Adı / miktar":"✎ Düzenle"}</button> ${x.okutuldu?`<button class="btn sm danger" data-cikar="${esc(x.b)}">🗑 Sil</button>`:`<button class="btn sm" data-elle="${esc(x.b)}">Say</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
   $$("#syTablo [data-duz]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); syMiktarDuzenle(b.dataset.duz); });
   $$("#syTablo tr[data-b]").forEach(tr=>tr.onclick=()=>syMiktarDuzenle(tr.dataset.b));
   $$("#syTablo [data-cikar]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); syCikar(b.dataset.cikar); });
@@ -2243,7 +2251,8 @@ function syIsle(bosSifir){
     let tutar=0, fiyatYok=false;
     for(const id in hedef){ const f=yuvarla(hedef[id]-kalanOf(id)); if(Math.abs(f)>1e-9){ const l=V.lotlar[id]; const fy=l.fiyat??x.fiyat; hareketEkle({tur:"SAYIM",kres:s.kres,barkod:x.b,lotId:id,miktar:f,fiyat:fy,ack:"Sayım "+(s.sayan?"("+s.sayan+")":""),grup}); if(fy!=null) tutar+=f*fy; else fiyatYok=true; } }
     const fark=yuvarla(x.okutuldu?x.say-x.sis:-x.sis);
-    satirlar.push({barkod:x.b, ad:x.u.ad, marka:x.u.marka||"", birim:x.u.birim, koli:koliMetin(x.u,x.okutuldu?x.say:0), skt:sktDag.filter(d=>d[1]>0).sort().map(d=>(d[0]?trTarih(d[0]):"tarihsiz")+": "+nf(d[1])).join(", "), sistem:x.sis, sayilan:x.okutuldu?x.say:0, fark, fiyat:x.fiyat, tutar:fiyatYok&&!tutar?null:yuvarla(tutar)});
+    const zz=syZaman(s,x.b);
+    satirlar.push({barkod:x.b, ad:x.u.ad, marka:x.u.marka||"", birim:x.u.birim, sayimSaati:zz.son||"", ilkSaat:zz.ilk||"", koli:koliMetin(x.u,x.okutuldu?x.say:0), skt:sktDag.filter(d=>d[1]>0).sort().map(d=>(d[0]?trTarih(d[0]):"tarihsiz")+": "+nf(d[1])).join(", "), sistem:x.sis, sayilan:x.okutuldu?x.say:0, fark, fiyat:x.fiyat, tutar:fiyatYok&&!tutar?null:yuvarla(tutar)});
   }
   const kayit={id:s.id,kres:s.kres,bas:s.bas,bit:new Date().toISOString(),sayan:s.sayan,not:s.not,satirlar,farkTutar:satirlar.reduce((t,x)=>t+(x.tutar||0),0),grup};
   V.sayimlar.push(kayit); V.aktifSayim=null; if(SY.kam) SY.kam.kapat(); kaydet(); SY.son=null;
@@ -2252,11 +2261,11 @@ function syIsle(bosSifir){
 function syTutanak(k){
   const satir=k.satirlar.slice().sort((a,b)=>a.ad.localeCompare(b.ad,"tr"));
   const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}</p>
-    <table><thead><tr><th>#</th><th>Ürün</th><th>Marka</th><th>Barkod</th><th>Birim</th><th>Sistem</th><th>Sayılan</th><th>STT/TETT dağılımı</th><th>Fark</th><th>Birim ₺</th><th>Fark ₺</th></tr></thead><tbody>
-    ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${esc(x.skt||"")}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
-    </tbody><tfoot><tr><td colspan="10" style="text-align:right"><b>Toplam fark</b></td><td style="text-align:right"><b>${tl(k.farkTutar)}</b></td></tr></tfoot></table>
+    <table><thead><tr><th>#</th><th>Ürün</th><th>Marka</th><th>Barkod</th><th>Birim</th><th>Sistem</th><th>Sayılan</th><th>STT/TETT dağılımı</th><th>Sayım saati</th><th>Fark</th><th>Birim ₺</th><th>Fark ₺</th></tr></thead><tbody>
+    ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${esc(x.skt||"")}</td><td class="small">${x.sayimSaati?trTarihSaatSn(x.sayimSaati):""}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
+    </tbody><tfoot><tr><td colspan="11" style="text-align:right"><b>Toplam fark</b></td><td style="text-align:right"><b>${tl(k.farkTutar)}</b></td></tr></tfoot></table>
     <table style="margin-top:28px;border:0"><tr><td style="border:0;width:33%">Sayımı yapan<br><br>${esc(k.sayan||"")}<br>İmza:</td><td style="border:0;width:33%">Mutfak sorumlusu<br><br><br>İmza:</td><td style="border:0">Onaylayan<br><br><br>İmza:</td></tr></table></div>`;
-  const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},{t:"Excel'e aktar",f:()=>{ csvIndir("sayim_"+KISA[k.kres]+"_"+k.bit.slice(0,10)+".csv",[["Ürün","Marka","Barkod","Birim","Sistem","Sayılan","STT/TETT dağılımı","Fark","Birim fiyat","Fark tutarı"],...satir.map(x=>[x.ad,x.marka,x.barkod,x.birim,csvSayi(x.sistem),csvSayi(x.sayilan),x.skt||"",csvSayi(x.fark),csvSayi(x.fiyat),csvSayi(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null))])]); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);
+  const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},{t:"Excel'e aktar",f:()=>{ csvIndir("sayim_"+KISA[k.kres]+"_"+k.bit.slice(0,10)+".csv",[["Ürün","Marka","Barkod","Birim","Sistem","Sayılan","STT/TETT dağılımı","Sayım saati","Fark","Birim fiyat","Fark tutarı"],...satir.map(x=>[x.ad,x.marka,x.barkod,x.birim,csvSayi(x.sistem),csvSayi(x.sayilan),x.skt||"",x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",csvSayi(x.fark),csvSayi(x.fiyat),csvSayi(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null))])]); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);
   $("table",b).classList.add("rt");
 }
 function yazdir(html, ad){

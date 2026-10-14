@@ -2104,13 +2104,38 @@ async function syCikar(barkod){
   if(SY.son && SY.son.barkod===barkod) SY.son=null; if(SY.grup && SY.grup.barkod===barkod) SY.grup=null; if(SY.hedef) delete SY.hedef[barkod];
   kaydet(); syCiz(); toast("Sayımdan çıkarıldı");
 }
+// Sayım listesinde "Düzenle": bu ürünün adı, koli içi adedi ve her STT/TETT için sayılan KOLİ + ADET tek pencerede değiştirilir
+function syMiktarDuzenle(barkod){
+  const s=V.aktifSayim; const u=V.urunler[barkod]; if(!s||!u) return;
+  const satir=Object.entries(s.sayilan).filter(([k,y])=>y.barkod===barkod);
+  if(!satir.length) satir.push([syAnahtar(barkod,null),{barkod,lotId:null,miktar:0}]);
+  const ka=+u.koliAdet>1?+u.koliAdet:0;
+  const parca=m=>{ if(!ka) return [0,m]; const k=Math.floor(m/ka+1e-9); return [k,yuvarla(m-k*ka)]; };
+  const b=dlg("Sayımı düzenle · "+u.ad,`
+    <label class="f">Ürün adı<input id="smAd" value="${esc(u.tanimsiz?"":u.ad)}" placeholder="Ürünün adı" style="font-size:16px"></label>
+    <label class="f">Kolide kaç ${esc(u.birim||"adet")} var? <span class="small muted">(koli yoksa boş bırakın)</span><input id="smKoliAdet" type="number" min="0" step="1" inputmode="numeric" value="${ka||""}" style="font-size:16px"></label>
+    <div class="small" style="font-weight:700;margin:10px 0 4px">Sayılan miktar</div>
+    <div class="tw"><table class="rt"><thead><tr><th>STT / TETT</th><th class="r">Koli</th><th class="r">Tek ${esc(u.birim||"adet")}</th><th class="r">Toplam</th></tr></thead><tbody>
+    ${satir.map(([k,y],i)=>{ const [kk,tt]=parca(y.miktar); const t=syLotSkt(y.lotId); return `<tr data-i="${i}"><td>${t?trTarih(t):"Tarih bilinmiyor"}</td><td class="r"><input class="smK" type="number" min="0" step="1" inputmode="numeric" value="${kk||""}" style="width:70px;font-size:16px;text-align:center"></td><td class="r"><input class="smT" type="number" min="0" step="any" inputmode="decimal" value="${tt||""}" style="width:70px;font-size:16px;text-align:center"></td><td class="r"><b class="smTop">${nf(y.miktar)}</b></td></tr>`; }).join("")}
+    </tbody></table></div><p class="small muted" id="smOzet"></p>`,
+    [{t:"Ürün kartı",f:()=>{ setTimeout(()=>urunDuzenle(barkod),30); }},{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{
+      const yeniKa=+$("#smKoliAdet",b).value||0; const ad=$("#smAd",b).value.trim();
+      if(ad){ u.ad=ad; u.tanimsiz=false; } u.koliAdet=yeniKa>1?yeniKa:null;
+      $$("tr[data-i]",b).forEach(tr=>{ const [k,y]=satir[+tr.dataset.i]; const m=yuvarla((+$(".smK",tr).value||0)*(yeniKa>1?yeniKa:1)+(+$(".smT",tr).value||0));
+        const fark=yuvarla(m-(s.sayilan[k]?s.sayilan[k].miktar:0)); if(Math.abs(fark)>1e-9){ const x=s.sayilan[k]||(s.sayilan[k]={barkod,lotId:y.lotId,miktar:0}); x.miktar=m; if(m<=0) delete s.sayilan[k]; s.log.push({t:new Date().toISOString(),barkod,lotId:y.lotId,art:fark,elle:true}); } });
+      kaydet(); urunListesiGuncelle(); syCiz(); toast("Sayım güncellendi"); }}]);
+  const hesap=()=>{ const ka2=+$("#smKoliAdet",b).value||0; let top=0; $$("tr[data-i]",b).forEach(tr=>{ const m=(+$(".smK",tr).value||0)*(ka2>1?ka2:1)+(+$(".smT",tr).value||0); $(".smTop",tr).textContent=nf(m); top+=m; });
+    $("#smOzet",b).textContent="Toplam: "+nf(top)+" "+(u.birim||"adet")+(ka2>1?" ("+koliMetin({koliAdet:ka2,birim:u.birim},top)+")":"")+(ka2>1?"":" · Koli sütununu kullanmak için kolide kaç adet olduğunu yazın."); };
+  b.addEventListener("input",hesap); hesap();
+}
 function syTablo(){
   const s=V.aktifSayim; if(!$("#syTablo")) return; let r=sySatirlar();
   const okut=r.filter(x=>x.okutuldu).length; const fk=r.filter(x=>x.okutuldu&&x.fark).length;
   $("#syOzet").textContent=`${okut} / ${r.length} ürün okutuldu · ${fk} farklı`;
   if(SY.sadeceFark) r=r.filter(x=>x.okutuldu&&x.fark); if(SY.ara){ const t=katla(SY.ara); r=r.filter(x=>katla(x.u.ad+" "+(x.u.marka||"")+" "+x.b).includes(t)); }
-  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}</td><td class="r">${nf(x.sis)}${koliMetin(x.u,x.sis)?'<div class="small muted">'+esc(koliMetin(x.u,x.sis))+"</div>":""}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b>${x.okutuldu&&koliMetin(x.u,x.say)?'<div class="small muted">'+esc(koliMetin(x.u,x.say))+"</div>":""}</td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-duz="${esc(x.b)}">${x.u.tanimsiz?"✎ Adını yaz":"✎ Düzenle"}</button> ${x.okutuldu?`<button class="btn sm danger" data-cikar="${esc(x.b)}">🗑 Sil</button>`:`<button class="btn sm" data-elle="${esc(x.b)}">Say</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
-  $$("#syTablo [data-duz]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); urunDuzenle(b.dataset.duz); });
+  $("#syTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th class="r">Sistem</th><th class="r">Sayılan</th><th class="r">Fark</th><th>Birim</th><th class="r">Fark ₺</th><th></th></tr></thead><tbody>${r.map(x=>`<tr class="tik" data-b="${esc(x.b)}" style="${x.okutuldu?"":"opacity:.55"}"><td>${esc(x.u.ad)}${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}${x.okutuldu?"":' <span class="pill gh">okutulmadı</span>'}</td><td class="r">${nf(x.sis)}${koliMetin(x.u,x.sis)?'<div class="small muted">'+esc(koliMetin(x.u,x.sis))+"</div>":""}</td><td class="r"><b>${x.okutuldu?nf(x.say):"—"}</b>${x.okutuldu&&koliMetin(x.u,x.say)?'<div class="small muted">'+esc(koliMetin(x.u,x.say))+"</div>":""}</td><td class="r ${x.okutuldu&&x.fark<0?"neg":""}">${x.okutuldu?(x.fark>0?"+":"")+nf(x.fark):""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.okutuldu&&x.fiyat!=null&&x.fark?tl(x.fark*x.fiyat):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-duz="${esc(x.b)}">${x.u.tanimsiz?"✎ Adı / miktar":"✎ Düzenle"}</button> ${x.okutuldu?`<button class="btn sm danger" data-cikar="${esc(x.b)}">🗑 Sil</button>`:`<button class="btn sm" data-elle="${esc(x.b)}">Say</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Okutmaya başlayın</div>';
+  $$("#syTablo [data-duz]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); syMiktarDuzenle(b.dataset.duz); });
+  $$("#syTablo tr[data-b]").forEach(tr=>tr.onclick=()=>syMiktarDuzenle(tr.dataset.b));
   $$("#syTablo [data-cikar]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); syCikar(b.dataset.cikar); });
   $$("#syTablo [data-elle]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); SY.son={barkod:b.dataset.elle,lotId:null}; if(!s.sayilan[b.dataset.elle]) s.sayilan[b.dataset.elle]={barkod:b.dataset.elle,lotId:null,miktar:0}; sySonCiz(); syTablo(); const i=$("#sySay"); i&&i.select(); });
 }

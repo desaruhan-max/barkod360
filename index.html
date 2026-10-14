@@ -2144,27 +2144,41 @@ async function syCikar(barkod){
   kaydet(); syCiz(); toast("Sayımdan çıkarıldı");
 }
 // Sayım listesinde "Düzenle": bu ürünün adı, koli içi adedi ve her STT/TETT için sayılan KOLİ + ADET tek pencerede değiştirilir
+// Sayım listesinde "Düzenle": ad, koli içi adet ve her STT/TETT satırının TARİHİ, KOLİ ve TEK ADET miktarı değiştirilir; yeni tarih satırı eklenir
 function syMiktarDuzenle(barkod){
   const s=V.aktifSayim; const u=V.urunler[barkod]; if(!s||!u) return;
-  const satir=Object.entries(s.sayilan).filter(([k,y])=>y.barkod===barkod);
-  if(!satir.length) satir.push([syAnahtar(barkod,null),{barkod,lotId:null,miktar:0}]);
+  const satir=Object.entries(s.sayilan).filter(([k,y])=>y.barkod===barkod).map(([k,y])=>({k,lotId:y.lotId,miktar:y.miktar}));
+  if(!satir.length) satir.push({k:null,lotId:null,miktar:0});
   const ka=+u.koliAdet>1?+u.koliAdet:0;
   const parca=m=>{ if(!ka) return [0,m]; const k=Math.floor(m/ka+1e-9); return [k,yuvarla(m-k*ka)]; };
+  const tYaz=iso=>iso?trTarih(iso):"";
+  const tCoz=v=>{ v=String(v||"").trim(); if(!v) return ""; const d=v.replace(/\D/g,""); if(d.length===6) return tarihGecerli(2000+(+d.slice(4,6)),+d.slice(2,4),+d.slice(0,2))||null; if(d.length===8) return tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2))||null; return null; };
+  const satirHtml=(r,i)=>{ const [kk,tt]=parca(r.miktar); return `<tr data-i="${i}"><td><input class="smD" inputmode="numeric" value="${tYaz(syLotSkt(r.lotId))}" placeholder="gg.aa.yyyy" style="width:112px;font-size:15px"></td><td class="r"><input class="smK" type="number" min="0" step="1" inputmode="numeric" value="${kk||""}" style="width:56px;font-size:16px;text-align:center"></td><td class="r"><input class="smT" type="number" min="0" step="any" inputmode="decimal" value="${tt||""}" style="width:56px;font-size:16px;text-align:center"></td><td class="r"><b class="smTop">${nf(r.miktar)}</b></td></tr>`; };
   const b=dlg("Sayımı düzenle · "+u.ad,`
     <label class="f">Ürün adı<input id="smAd" value="${esc(u.tanimsiz?"":u.ad)}" placeholder="Ürünün adı" style="font-size:16px"></label>
     <label class="f">Kolide kaç ${esc(u.birim||"adet")} var? <span class="small muted">(koli yoksa boş bırakın)</span><input id="smKoliAdet" type="number" min="0" step="1" inputmode="numeric" value="${ka||""}" style="font-size:16px"></label>
-    <div class="small" style="font-weight:700;margin:10px 0 4px">Sayılan miktar</div>
-    <div class="tw"><table class="rt"><thead><tr><th>STT / TETT</th><th class="r">Koli</th><th class="r">Tek ${esc(u.birim||"adet")}</th><th class="r">Toplam</th></tr></thead><tbody>
-    ${satir.map(([k,y],i)=>{ const [kk,tt]=parca(y.miktar); const t=syLotSkt(y.lotId); return `<tr data-i="${i}"><td>${t?trTarih(t):"Tarih bilinmiyor"}</td><td class="r"><input class="smK" type="number" min="0" step="1" inputmode="numeric" value="${kk||""}" style="width:70px;font-size:16px;text-align:center"></td><td class="r"><input class="smT" type="number" min="0" step="any" inputmode="decimal" value="${tt||""}" style="width:70px;font-size:16px;text-align:center"></td><td class="r"><b class="smTop">${nf(y.miktar)}</b></td></tr>`; }).join("")}
-    </tbody></table></div><p class="small muted" id="smOzet"></p>`,
+    <div class="small" style="font-weight:700;margin:10px 0 4px">STT / TETT ve sayılan miktar <span class="muted" style="font-weight:400">(tarihi de değiştirebilirsiniz: 210728)</span></div>
+    <div class="tw"><table class="rt"><thead><tr><th>STT / TETT</th><th class="r">Koli</th><th class="r">Tek</th><th class="r">Toplam</th></tr></thead><tbody id="smGovde">${satir.map(satirHtml).join("")}</tbody></table></div>
+    <button type="button" class="btn sm" id="smEkle" style="margin-top:6px">+ Başka tarih ekle</button>
+    <p class="small muted" id="smOzet"></p>`,
     [{t:"Ürün kartı",f:()=>{ setTimeout(()=>urunDuzenle(barkod),30); }},{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{
-      const yeniKa=+$("#smKoliAdet",b).value||0; const ad=$("#smAd",b).value.trim();
+      const yeniKa=+$("#smKoliAdet",b).value||0; const carp=yeniKa>1?yeniKa:1; const ad=$("#smAd",b).value.trim();
+      // önce tarihleri kontrol et
+      const yeni=[]; let hata=false;
+      $$("tr[data-i]",b).forEach(tr=>{ const ham=$(".smD",tr).value; const t=tCoz(ham); if(t===null){ hata=true; $(".smD",tr).style.borderColor="#c62828"; return; }
+        const m=yuvarla((+$(".smK",tr).value||0)*carp+(+$(".smT",tr).value||0)); yeni.push({t,m}); });
+      if(hata){ toast("Bir tarih anlaşılamadı. Örnek: 21.07.2028 ya da 210728",1); return false; }
       if(ad){ u.ad=ad; u.tanimsiz=false; } u.koliAdet=yeniKa>1?yeniKa:null;
-      $$("tr[data-i]",b).forEach(tr=>{ const [k,y]=satir[+tr.dataset.i]; const m=yuvarla((+$(".smK",tr).value||0)*(yeniKa>1?yeniKa:1)+(+$(".smT",tr).value||0));
-        const fark=yuvarla(m-(s.sayilan[k]?s.sayilan[k].miktar:0)); if(Math.abs(fark)>1e-9){ const x=s.sayilan[k]||(s.sayilan[k]={barkod,lotId:y.lotId,miktar:0}); x.miktar=m; if(m<=0) delete s.sayilan[k]; s.log.push({t:new Date().toISOString(),barkod,lotId:y.lotId,art:fark,elle:true}); } });
+      // bu ürünün sayım satırlarını yeniden yaz (aynı tarih iki kez yazıldıysa toplanır)
+      const once=syUrunSayilan(s,barkod);
+      for(const k of Object.keys(s.sayilan)) if(s.sayilan[k].barkod===barkod) delete s.sayilan[k];
+      for(const {t,m} of yeni){ if(!(m>0)) continue; const lot=t?sySktAnahtar(barkod,t):null; const k=syAnahtar(barkod,lot); const x=s.sayilan[k]||(s.sayilan[k]={barkod,lotId:lot,miktar:0}); x.miktar=yuvarla(x.miktar+m); }
+      s.log.push({t:new Date().toISOString(),barkod,art:yuvarla(syUrunSayilan(s,barkod)-once),elle:true,duzenleme:yeni});
+      if(SY.son&&SY.son.barkod===barkod) SY.son={barkod,lotId:null}; SY.fotolar=(SY.fotolar||[]).filter(g=>g.barkod!==barkod);
       kaydet(); urunListesiGuncelle(); syCiz(); toast("Sayım güncellendi"); }}]);
   const hesap=()=>{ const ka2=+$("#smKoliAdet",b).value||0; let top=0; $$("tr[data-i]",b).forEach(tr=>{ const m=(+$(".smK",tr).value||0)*(ka2>1?ka2:1)+(+$(".smT",tr).value||0); $(".smTop",tr).textContent=nf(m); top+=m; });
-    $("#smOzet",b).textContent="Toplam: "+nf(top)+" "+(u.birim||"adet")+(ka2>1?" ("+koliMetin({koliAdet:ka2,birim:u.birim},top)+")":"")+(ka2>1?"":" · Koli sütununu kullanmak için kolide kaç adet olduğunu yazın."); };
+    $("#smOzet",b).textContent="Toplam: "+nf(top)+" "+(u.birim||"adet")+(ka2>1?" ("+koliMetin({koliAdet:ka2,birim:u.birim},top)+")":" · Koli sütununu kullanmak için kolide kaç adet olduğunu yazın."); };
+  $("#smEkle",b).onclick=()=>{ const g=$("#smGovde",b); const n=$$("tr[data-i]",b).length; g.insertAdjacentHTML("beforeend",satirHtml({lotId:null,miktar:0},n)); const d=$$(".smD",b).pop(); d&&d.focus(); hesap(); };
   b.addEventListener("input",hesap); hesap();
 }
 function syTablo(){

@@ -564,7 +564,32 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
 /* ================== SABİTLER ================== */
 const KRESLER = ["Saadet Hasan Gülbaran","Bahri Behçet Yıldız","Ferdi Zeyrek","Fidan Kalpler"];
 const KISA = {"Saadet Hasan Gülbaran":"SAADET","Bahri Behçet Yıldız":"BAHRİ","Ferdi Zeyrek":"FERDİ","Fidan Kalpler":"FİDAN"};
-const GRUPLAR = ["Muhtelif Gıda","Süt ve Süt Ürünleri","Meyve Sebze","Ekmek ve Unlu Mamuller","Donuk Gıdalar","Et ve Et Ürünleri","Temizlik / Diğer"];
+const GRUPLAR = ["Muhtelif Gıda","Süt ve Süt Ürünleri","Et, Tavuk ve Balık","Yumurta","Bakliyat","Makarna, Şehriye, Erişte","Pirinç ve Bulgur","Un ve Unlu Mamuller","Sıvı ve Katı Yağlar","Şeker, Bal, Reçel","Kahvaltılık","Konserve, Salça, Turşu","Baharat ve Tuz","Meyve ve Sebze","Donuk Gıdalar","İçecekler","Bisküvi ve Atıştırmalık","Temizlik / Diğer"];
+const GRUP_ESKI = {"Meyve Sebze":"Meyve ve Sebze","Ekmek ve Unlu Mamuller":"Un ve Unlu Mamuller","Et ve Et Ürünleri":"Et, Tavuk ve Balık"};
+// Ürünün adından/içeriğinden gıda grubunu tahmin et (Türkçe anahtar kelimeler). Bulamazsa "".
+const GRUP_KURAL = [
+  ["Temizlik / Diğer",/deterjan|sabun|çamaşır|bulaşık|peçete|kağıt havlu|tuvalet kağıdı|çöp poşet|eldiven|dezenfektan|çamaşır suyu|yumuşatıcı/],
+  ["Makarna, Şehriye, Erişte",/erişte|makarna|şehriye|spagetti|fusilli|penne|lazanya|burgu|kuskus|mantı|noodle/],
+  ["Bakliyat",/mercimek|nohut|kuru fasulye|barbunya|börülce|bakla|kuru bezelye|fasulye/],
+  ["Pirinç ve Bulgur",/pirinç|bulgur|baldo|osmancık|firik|yarma/],
+  ["Un ve Unlu Mamuller",/\bun\b|irmik|nişasta|galeta|yufka|ekmek|lavaş|pide|simit|bazlama|maya/],
+  ["Süt ve Süt Ürünleri",/süt|yoğurt|peynir|ayran|kefir|tereyağ|kaymak|labne|lor|kaşar|krema/],
+  ["Sıvı ve Katı Yağlar",/margarin|zeytinyağ|ayçiçek|mısır yağ|fındık yağ|sıvı yağ|bitkisel yağ|\byağ\b/],
+  ["Şeker, Bal, Reçel",/şeker|\bbal\b|reçel|pekmez|marmelat|glikoz/],
+  ["Kahvaltılık",/zeytin|helva|tahin|fındık ezme|krem çikolata|kahvaltılık/],
+  ["Konserve, Salça, Turşu",/salça|konserve|turşu|domates püre|ketçap|mayonez/],
+  ["Baharat ve Tuz",/\btuz\b|baharat|kimyon|pul biber|karabiber|nane|kekik|sumak|tarçın|zerdeçal|vanilya|kabartma tozu/],
+  ["Yumurta",/yumurta/],
+  ["Et, Tavuk ve Balık",/tavuk|piliç|kıyma|dana|kuzu|\bet\b|but|göğüs|balık|ton balığı|hindi|sucuk|köfte/],
+  ["Donuk Gıdalar",/donuk|dondurulmuş|frozen/],
+  ["İçecekler",/maden suyu|meyve suyu|\bsu\b|çay|kahve|limonata|şalgam|nektar/],
+  ["Bisküvi ve Atıştırmalık",/bisküvi|kraker|gofret|kek|kurabiye|çikolata|cips|kuruyemiş/],
+  ["Meyve ve Sebze",/elma|armut|muz|portakal|mandalina|domates|salatalık|biber|patates|soğan|havuç|kabak|patlıcan|ıspanak|marul|limon|üzüm|kayısı|kuru üzüm|kuru kayısı/]
+];
+function grupTahmin(u){ const t=((u.ad||"")+" "+(u.icerik||"").slice(0,60)).toLocaleLowerCase("tr"); for(const [g,re] of GRUP_KURAL) if(re.test(t)) return g; return ""; }
+// eski grup adlarını yenilere çevir; grubu belirsiz (Muhtelif) ürünlere tahmini grup ver
+function gruplariDuzenle(){ let deg=false; for(const u of Object.values(V.urunler)){ if(GRUP_ESKI[u.grup]){ u.grup=GRUP_ESKI[u.grup]; deg=true; }
+    if((!u.grup||u.grup==="Muhtelif Gıda") && !u.tanimsiz){ const g=grupTahmin(u); if(g){ u.grup=g; u.grupOto=true; deg=true; } } } return deg; }
 const TEDARIKCI_VARSAYILAN = ["Semet Gıda","Mali Gıda"];
 const BIRIMLER = ["adet","paket","kg","lt","koli","kutu","şişe","kavanoz","teneke","bağ"];
 const SAKLAMA = {oda:"Oda sıcaklığı (serin, kuru)", soguk:"Soğukta (0–4 °C)", donuk:"Donuk (−18 °C ve altı)"};
@@ -603,6 +628,40 @@ async function indir(ad, icerik, tip){
       await d.save({filename:ad, data: icerik instanceof Blob?icerik:String(icerik)}); }catch(e){ if(e&&e.code!=="declined") toast("Dosya kaydedilemedi: "+(e.message||e.code),1); } return; }
   const b=icerik instanceof Blob?icerik:new Blob([icerik],{type:tip||"application/octet-stream"}); const u=URL.createObjectURL(b); const a=document.createElement("a"); a.href=u; a.download=ad; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(u);a.remove();},1500); }
 function csvIndir(ad, satirlar){ const s="﻿"+satirlar.map(r=>r.map(v=>{ v=v==null?"":String(v); return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(";")).join("\r\n"); indir(ad, s, "text/csv;charset=utf-8"); }
+/* ===== Basit XLSX yazıcı (kütüphanesiz, internetsiz) ===== */
+const XLSX_STIL={baslik:1,kategori:2,normal:0,tarih:3,kirmizi:4,turuncu:5,kalin:6,sayi:7,ust:8,tarihKirmizi:9,tarihTuruncu:10};
+function xlsxOlustur(sayfalar){ // sayfalar: [{ad, sutunlar:[genişlik], satirlar:[[{v,s}|değer]], birlesik:["A1:J1"]}]
+  const enc=new TextEncoder(); const x=v=>String(v).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,"");
+  const harf=i=>{ let s=""; i++; while(i){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; };
+  const dosya={};
+  dosya["[Content_Types].xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sayfalar.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`;
+  dosya["_rels/.rels"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  dosya["xl/workbook.xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sayfalar.map((p,i)=>`<sheet name="${x(p.ad.slice(0,31))}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")}</sheets></workbook>`;
+  dosya["xl/_rels/workbook.xml.rels"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sayfalar.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")}<Relationship Id="rId${sayfalar.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  dosya["xl/styles.xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd.mm.yyyy"/></numFmts>
+<fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="12"/><color rgb="FF14532D"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><color rgb="FF14532D"/><name val="Calibri"/></font></fonts>
+<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1B6B52"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE3F1EA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFDE2E1"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF1D6"/></patternFill></fill></fills>
+<borders count="2"><border/><border><bottom style="thin"><color rgb="FFCCCCCC"/></bottom></border></borders><cellStyleXfs count="1"><xf/></cellStyleXfs>
+<cellXfs count="11"><xf borderId="1" applyBorder="1"/><xf fontId="1" fillId="2" applyFont="1" applyFill="1"><alignment wrapText="1" vertical="center"/></xf><xf fontId="2" fillId="3" applyFont="1" applyFill="1"/><xf numFmtId="164" borderId="1" applyNumberFormat="1" applyBorder="1"/><xf fillId="4" borderId="1" applyFill="1" applyBorder="1"/><xf fillId="5" borderId="1" applyFill="1" applyBorder="1"/><xf fontId="3" applyFont="1"/><xf numFmtId="0" borderId="1" applyBorder="1"/><xf fontId="4" applyFont="1"/><xf numFmtId="164" fillId="4" borderId="1" applyNumberFormat="1" applyFill="1" applyBorder="1"/><xf numFmtId="164" fillId="5" borderId="1" applyNumberFormat="1" applyFill="1" applyBorder="1"/></cellXfs></styleSheet>`;
+  sayfalar.forEach((p,i)=>{ const rows=p.satirlar.map((r,ri)=>`<row r="${ri+1}">${r.map((c,ci)=>{ if(c==null||c==="") return ""; const o=(typeof c==="object"&&!(c instanceof Date))?c:{v:c}; let v=o.v, st=o.s||0; const ref=harf(ci)+(ri+1);
+      if(v instanceof Date){ const n=(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate())-Date.UTC(1899,11,30))/864e5; const ds=st===4?9:st===5?10:(st||3); return `<c r="${ref}" s="${ds}"><v>${n}</v></c>`; }
+      if(typeof v==="number"&&isFinite(v)) return `<c r="${ref}" s="${st}"><v>${v}</v></c>`;
+      if(v==null||v==="") return st?`<c r="${ref}" s="${st}"/>`:""; return `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`; }).join("")}</row>`).join("");
+    dosya["xl/worksheets/sheet"+(i+1)+".xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${p.donuk?`<sheetViews><sheetView workbookViewId="0"><pane ySplit="${p.donuk}" topLeftCell="A${p.donuk+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`:""}${p.sutunlar?`<cols>${p.sutunlar.map((w,ci)=>`<col min="${ci+1}" max="${ci+1}" width="${w}" customWidth="1"/>`).join("")}</cols>`:""}<sheetData>${rows}</sheetData>${(p.birlesik||[]).length?`<mergeCells count="${p.birlesik.length}">${p.birlesik.map(m=>`<mergeCell ref="${m}"/>`).join("")}</mergeCells>`:""}</worksheet>`; });
+  // ZIP (sıkıştırmasız)
+  const crcT=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+  const crc=b=>{ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=crcT[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; };
+  const parcalar=[], merkez=[]; let ofs=0;
+  for(const ad in dosya){ const ab=enc.encode(ad), d=enc.encode(dosya[ad]), c=crc(d);
+    const h=new DataView(new ArrayBuffer(30)); h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint32(14,c,true); h.setUint32(18,d.length,true); h.setUint32(22,d.length,true); h.setUint16(26,ab.length,true);
+    parcalar.push(new Uint8Array(h.buffer),ab,d);
+    const m=new DataView(new ArrayBuffer(46)); m.setUint32(0,0x02014b50,true); m.setUint16(4,20,true); m.setUint16(6,20,true); m.setUint16(8,0x0800,true); m.setUint32(16,c,true); m.setUint32(20,d.length,true); m.setUint32(24,d.length,true); m.setUint16(28,ab.length,true); m.setUint32(42,ofs,true);
+    merkez.push(new Uint8Array(m.buffer),ab); ofs+=30+ab.length+d.length; }
+  const mb=merkez.reduce((t,a)=>t+a.length,0); const e=new DataView(new ArrayBuffer(22)); const n=Object.keys(dosya).length;
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,n,true); e.setUint16(10,n,true); e.setUint32(12,mb,true); e.setUint32(16,ofs,true);
+  return new Blob([...parcalar,...merkez,new Uint8Array(e.buffer)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+const tarihNesne = iso => iso? new Date(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10)) : null;
 const csvSayi = n => (n==null||n==="")?"":String(yuvarla(n)).replace(".",",");
 
 /* ================== DİYALOG ================== */
@@ -1094,10 +1153,11 @@ Kurallar:
 - uretici_unvani ve uretici_adresi: "Üretici", "Üretim Yeri", "İmalatçı", "Üreten Firma" bilgisi. Yoksa "Dağıtıcı/İthalatçı" bilgisini yazma.
 - alerjenler yalnız şu listeden: ${ALERJENLER.join(", ")}.
 - icindekiler: "İçindekiler"/"Bileşenler" listesinin tam metni (görünüyorsa).
+- grup: ürünün gıda grubu, yalnız şu listeden biri: ${GRUPLAR.join(", ")}.
 - urun_adi: ambalajın önündeki ürün adı (örn. "Tam Yağlı Süzme Peynir"); marka: firmanın marka adı.
 - saklama: "oda", "soguk" (0-4/+4 °C, buzdolabı) ya da "donuk" (-18 °C).
 Yalnız şu JSON nesnesini yaz:
-{"urun_adi":null,"marka":null,"uretici_unvani":null,"uretici_adresi":null,"isletme_no":null,"mensei":null,"net_miktar":null,"saklama":null,"alerjenler":[],"icindekiler":null,"stt":null,"tett":null,"uretim_tarihi":null,"uretim_saati":null,"parti_no":null,"etiketteki_tarih_yazilari":[],"emin_degil":[]}`;
+{"urun_adi":null,"marka":null,"uretici_unvani":null,"uretici_adresi":null,"isletme_no":null,"mensei":null,"net_miktar":null,"saklama":null,"alerjenler":[],"icindekiler":null,"grup":null,"stt":null,"tett":null,"uretim_tarihi":null,"uretim_saati":null,"parti_no":null,"etiketteki_tarih_yazilari":[],"emin_degil":[]}`;
     let j;
     const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),45000); // yanıt gelmezse cihazdaki okuyucuya geç
     try{ j = ARTIFACT ? await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal,onText:()=>ilerle&&ilerle(.7,"Claude yazıyor…")}) : await this.api(istem, blob, ctl.signal); clearTimeout(sure); }
@@ -1108,7 +1168,7 @@ Yalnız şu JSON nesnesini yaz:
     const emin=new Set((j.emin_degil||[]).map(String));
     const R={tarihler:[], skt:"", sktTur:"", ut:t(j.uretim_tarihi), us:(/^\d{1,2}:\d{2}$/.test(j.uretim_saati||"")?j.uretim_saati.padStart(5,"0"):""), lot:str(j.parti_no), isletme:str(j.isletme_no),
       uretici:str(j.uretici_unvani), adres:str(j.uretici_adresi), net:str(j.net_miktar), mensei:str(j.mensei), saklama:["oda","soguk","donuk"].includes(j.saklama)?j.saklama:"",
-      alerjen:(j.alerjenler||[]).filter(a=>ALERJENLER.includes(a)), icerik:str(j.icindekiler), marka:str(j.marka), ad:str(j.urun_adi), supheli:[], claude:true};
+      alerjen:(j.alerjenler||[]).filter(a=>ALERJENLER.includes(a)), icerik:str(j.icindekiler), grup:GRUPLAR.includes(j.grup)?j.grup:"", marka:str(j.marka), ad:str(j.urun_adi), supheli:[], claude:true};
     if(t(j.stt)){ R.skt=t(j.stt); R.sktTur="STT"; } else if(t(j.tett)){ R.skt=t(j.tett); R.sktTur="TETT"; }
     if(emin.has("stt")||emin.has("tett")) R.supheli.push("skt"); if(emin.has("uretim_tarihi")) R.supheli.push("ut"); if(emin.has("parti_no")) R.supheli.push("lot");
     if(R.skt) R.tarihler.push({iso:R.skt,tur:R.sktTur}); if(R.ut) R.tarihler.push({iso:R.ut,tur:"URETIM"});
@@ -1614,6 +1674,7 @@ function kbOcrUygula(R, zorla, sessiz){
     if(kbAlanYaz("u_net",R.net,false,false)) yaz.push("net miktar");
     if(kbAlanYaz("u_mensei",R.mensei,false,false)) yaz.push("menşei");
     if(kbAlanYaz("u_icerik",R.icerik,false,false)) yaz.push("içindekiler");
+    if(R.grup && $("#u_grup").value==="Muhtelif Gıda"){ $("#u_grup").value=R.grup; yaz.push("gıda grubu"); }
     if(R.saklama && !KB.urunVar){ $("#u_saklama").value=R.saklama; yaz.push("saklama"); }
     if(R.alerjen.length && !KB.urunVar){ kbAlerjenCiz([...new Set([...kbAlerjenler(),...R.alerjen])]); yaz.push("alerjen"); }
   }
@@ -1950,6 +2011,7 @@ async function syEtiketOku(barkod, hazirDosya, sessiz){
     // elle "Etiketi Claude'a okut" denince arka etiketteki daha tam ad öncekinin yerine geçer
     if(R.ad && (u.tanimsiz||!u.ad||((!sessiz||!u.uretici) && R.ad!==u.ad))){ const eski=u.tanimsiz?"":u.ad; u.ad=R.ad; u.tanimsiz=false; yaz.push(eski?"ad ("+eski+" → "+R.ad+")":"ad"); }
     const al=(k,v,et)=>{ if(v && !u[k]){ u[k]=v; yaz.push(et); } };
+    if(R.grup && (!u.grup||u.grup==="Muhtelif Gıda"||u.grupOto)){ u.grup=R.grup; u.grupOto=true; yaz.push("grup"); } else if(!u.grup||u.grup==="Muhtelif Gıda"){ const g=grupTahmin(u); if(g){ u.grup=g; u.grupOto=true; } }
     al("marka",R.marka,"marka"); al("net",R.net,"miktar"); al("uretici",R.uretici,"üretici"); al("adres",R.adres,"adres"); al("isletme",R.isletme,"işletme no"); al("mensei",R.mensei,"menşei"); al("icerik",R.icerik,"içindekiler");
     if(R.saklama && (!u.saklama||u.saklama==="oda") && R.saklama!=="oda"){ u.saklama=R.saklama; yaz.push("saklama"); }
     if(R.alerjen.length && !(u.alerjen||[]).length){ u.alerjen=R.alerjen; yaz.push("alerjen"); }
@@ -2104,7 +2166,39 @@ SAYFA.stok = {
       </tbody><tfoot><tr><td colspan="7">Toplam ${r.length} ürün</td><td class="r">${tl(top)}</td><td></td></tr></tfoot></table></div>`;
     $$("#stTablo tr[data-b]").forEach(t=>t.onclick=()=>urunDetay(t.dataset.b, kap==="tum"?null:aktifKres()));
   },
-  csv(){ const r=this.veri(); csvIndir("stok_"+($("#stKapsam").value==="tum"?"TUM":KISA[aktifKres()])+"_"+bugun()+".csv",[["Barkod","Ürün","Marka","Grup","Miktar","Birim","Parti sayısı","En yakın STT/TETT","Stok değeri (₺)"],...r.map(x=>[x.b,x.u.ad,x.u.marka,x.u.grup,csvSayi(x.mik),x.u.birim,x.lot,trTarih(x.skt),csvSayi(x.deger)])]); }
+  csv(){ // Excel: gıda gruplarına göre kategorili stok + partiler (STT/TETT) + grup özeti
+    const tum=$("#stKapsam").value==="tum"; const kres=tum?null:aktifKres(); const r=this.veri();
+    if(gruplariDuzenle()){ kaydet(); }
+    const grupOf=u=>u.grup&&GRUPLAR.includes(u.grup)?u.grup:(grupTahmin(u)||"Muhtelif Gıda");
+    const sira=g=>{ const i=GRUPLAR.indexOf(g); return g==="Muhtelif Gıda"?98:g==="Temizlik / Diğer"?99:(i<0?97:i); };
+    const gruplar={}; r.forEach(x=>{ const g=grupOf(x.u); (gruplar[g]=gruplar[g]||[]).push(x); });
+    const gSira=Object.keys(gruplar).sort((a,b)=>sira(a)-sira(b));
+    const durum=skt=>{ if(!skt) return ["Tarih yok",0]; const g=gunFark(skt); return g<0?["TARİHİ GEÇTİ",XLSX_STIL.kirmizi]:g<=7?["7 gün içinde",XLSX_STIL.turuncu]:g<=30?["30 gün içinde",0]:["Normal",0]; };
+    const baslik=(t)=>[{v:t,s:XLSX_STIL.ust}];
+    const kapsamAd=tum?"Tüm kreşler":aktifKres();
+    // 1. sayfa: kategorili stok
+    const H1=["Ürün","Marka","Net miktar","Barkod","Miktar","Birim","Koli","Parti","En yakın STT/TETT","Kalan gün","Durum"];
+    const s1=[baslik("BARKOD360 · Stok Durumu · "+kapsamAd+" · "+trTarih(bugun())),[],H1.map(v=>({v,s:XLSX_STIL.baslik}))];
+    gSira.forEach(g=>{ const xs=gruplar[g].sort((a,b)=>a.u.ad.localeCompare(b.u.ad,"tr"));
+      s1.push([{v:g+"  ("+xs.length+" çeşit)",s:XLSX_STIL.kategori},...Array(10).fill({v:"",s:XLSX_STIL.kategori})]);
+      xs.forEach(x=>{ const [dt,ds]=durum(x.skt); s1.push([x.u.ad,x.u.marka||"",x.u.net||"",x.b,{v:yuvarla(x.mik),s:XLSX_STIL.sayi},x.u.birim||"",koliMetin(x.u,x.mik)||"",x.lot,x.skt?{v:tarihNesne(x.skt),s:ds||XLSX_STIL.tarih}:"",x.skt?{v:gunFark(x.skt),s:ds}:"",{v:dt,s:ds}]); });
+      s1.push([]); });
+    s1.push([{v:"Toplam "+r.length+" ürün çeşidi",s:XLSX_STIL.kalin}]);
+    // 2. sayfa: partiler (her STT/TETT ayrı satır)
+    const H2=["Gıda grubu","Ürün","Marka",...(tum?["Kreş"]:[]),"Parti / Lot","Üretim tarihi","STT/TETT türü","STT/TETT","Kalan gün","Miktar","Birim","Durum"];
+    const s2=[baslik("BARKOD360 · Partiler ve son tüketim tarihleri · "+kapsamAd+" · "+trTarih(bugun())),[],H2.map(v=>({v,s:XLSX_STIL.baslik}))];
+    const ls=Object.values(V.lotlar).filter(l=>(!kres||l.kres===kres)&&!l.red&&kalanOf(l.id)>0).map(l=>({l,u:V.urunler[l.barkod]||{ad:l.barkod}}));
+    ls.sort((a,b)=>sira(grupOf(a.u))-sira(grupOf(b.u))||a.u.ad.localeCompare(b.u.ad,"tr")||(a.l.skt||"9").localeCompare(b.l.skt||"9"));
+    ls.forEach(({l,u})=>{ const [dt,ds]=durum(l.skt); s2.push([grupOf(u),u.ad,u.marka||"",...(tum?[KISA[l.kres]||l.kres]:[]),l.lot||"",l.ut?tarihNesne(l.ut):"",l.sktTur||"",l.skt?{v:tarihNesne(l.skt),s:ds||XLSX_STIL.tarih}:"",l.skt?{v:gunFark(l.skt),s:ds}:"",{v:yuvarla(kalanOf(l.id)),s:XLSX_STIL.sayi},u.birim||"",{v:dt,s:ds}]); });
+    // 3. sayfa: grup özeti
+    const s3=[baslik("BARKOD360 · Gıda grubu özeti · "+kapsamAd+" · "+trTarih(bugun())),[],["Gıda grubu","Ürün çeşidi","Tarihi geçmiş parti","7 gün içinde dolacak"].map(v=>({v,s:XLSX_STIL.baslik}))];
+    gSira.forEach(g=>{ const bk=new Set(gruplar[g].map(x=>x.b)); const gl=ls.filter(o=>bk.has(o.l.barkod)); s3.push([g,gruplar[g].length,gl.filter(o=>o.l.skt&&gunFark(o.l.skt)<0).length,gl.filter(o=>o.l.skt&&gunFark(o.l.skt)>=0&&gunFark(o.l.skt)<=7).length]); });
+    const blob=xlsxOlustur([
+      {ad:"Stok (gruplu)",sutunlar:[34,16,12,16,9,8,18,7,14,10,16],satirlar:s1,donuk:3,birlesik:["A1:K1"]},
+      {ad:"Partiler (STT-TETT)",sutunlar:[24,30,14,...(tum?[10]:[]),16,13,12,13,10,9,8,16],satirlar:s2,donuk:3},
+      {ad:"Grup özeti",sutunlar:[28,13,18,20],satirlar:s3,donuk:3}]);
+    indir("BARKOD360_stok_"+(tum?"TUM":KISA[aktifKres()])+"_"+bugun()+".xlsx",blob);
+    toast("Excel dosyası indirildi (İndirilenler)"); }
 };
 function urunDetay(barkod, kres){
   const u=V.urunler[barkod]; const ls=fefoSirala(lotlarOf(barkod,kres).filter(l=>kalanOf(l.id)>0||l.red));
@@ -2229,7 +2323,7 @@ function urunDuzenle(kod, yeni){
     ${yeni?'<p class="hint">Bu iç kod (20… ile başlar) yalnızca kurum içinde geçerlidir. "Etiket Bas"tan barkodunu basıp ürünün kabına yapıştırabilirsiniz.</p>':""}`,
     [ ...(yeni?[]:[{t:"Kartı sil",c:"danger",f:()=>{ setTimeout(()=>urunSil(kod),30); }}]),
       {t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const ad=$("#ue_ad").value.trim(); if(!ad){ toast("Ürün adı gerekli",1); return false; }
-      V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),icerik:$("#ue_icerik").value.trim(),koliAdet:$("#ue_koliAdet").value===""?null:+$("#ue_koliAdet").value,koliBarkod:$("#ue_koliBarkod").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
+      V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),grupOto:false,icerik:$("#ue_icerik").value.trim(),koliAdet:$("#ue_koliAdet").value===""?null:+$("#ue_koliAdet").value,koliBarkod:$("#ue_koliBarkod").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
       kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(V.aktifSayim && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı kaydedildi"); }}], true);
   selDoldur($("#ue_grup",b),GRUPLAR,u.grup); selDoldur($("#ue_birim",b),BIRIMLER,u.birim); selDoldur($("#ue_saklama",b),Object.entries(SAKLAMA),u.saklama);
   $("#ue_al",b).onclick=e=>{ const x=e.target.closest("button"); if(x) x.classList.toggle("on"); };
@@ -2343,6 +2437,7 @@ SAYFA.yedek = {
 (async function(){
   try{ await DB.ac(); const v=await DB.al("veri"); if(v){ V=Object.assign(bosVeri(),v); V.ayar=Object.assign(bosVeri().ayar,v.ayar||{}); } }
   catch(e){ toast("Veri deposu açılamadı: "+e.message,1); }
+  try{ if(gruplariDuzenle()) setTimeout(kaydet,2000); }catch(e){ console.warn(e); }
   hesapla(); await senkKur(); kresCiz(); urunListesiGuncelle();
   for(const k in SAYFA) SAYFA[k].ilk && SAYFA[k].ilk();
   $("#tabs").onclick=e=>{ const b=e.target.closest("button[data-tab]"); if(b) sekme(b.dataset.tab); };

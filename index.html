@@ -1130,6 +1130,27 @@ const ClaudeOkur = {
     const metin=(d.content||[]).map(c=>c.text||"").join(""); const a=metin.indexOf("{"), z=metin.lastIndexOf("}");
     if(a<0||z<a) throw new Error("Claude yanıtı okunamadı"); return JSON.parse(metin.slice(a,z+1));
   },
+  // Yalnız tarih: küçük resim + kısa yanıt → çok daha hızlı (sayımda art arda çekim için)
+  async tarihOku(canvas){
+    const k=Math.min(1,1400/Math.max(canvas.width,canvas.height)); const c=document.createElement("canvas"); c.width=Math.round(canvas.width*k); c.height=Math.round(canvas.height*k); c.getContext("2d").drawImage(canvas,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.9));
+    const istem=`Bu fotoğraf bir gıda ambalajındaki tarih baskısı. Bugün ${bugun()}. Yalnız gördüğünü yaz, tahmin etme.
+Türkiye'de gün önce yazılır (19.01.2027 = 2027-01-19). Yalnız ay/yıl varsa ayın son günü. Nokta vuruşlu baskıda 0/O, 1/I, 5/S, 7/1, 8/B karışıklığına dikkat et; yılı özellikle dikkatli oku.
+STT/SKT/Son Tüketim/EXP → stt; TETT/Tavsiye Edilen/Best before → tett; ÜT/Üretim/Prod → uretim. Türü yazmayan iki tarihte erken olan üretim, geç olan son tüketimdir.
+Yalnız şu JSON: {"stt":null,"tett":null,"uretim":null,"parti":null}`;
+    const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),30000);
+    try{
+      let j;
+      if(ARTIFACT) j=await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal});
+      else { const b64=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(",")[1]); fr.onerror=rej; fr.readAsDataURL(blob); });
+        const y=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctl.signal,headers:{"content-type":"application/json","x-api-key":this.anahtar,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+          body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:120,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
+        const d=await y.json().catch(()=>({})); if(!y.ok) throw new Error(y.status===401?"Anahtar geçersiz":((d.error&&d.error.message)||("HTTP "+y.status)));
+        const m=(d.content||[]).map(x=>x.text||"").join(""); const a=m.indexOf("{"), z=m.lastIndexOf("}"); j=JSON.parse(m.slice(a,z+1)); }
+      const t=v=>(typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&tarihGecerli(+v.slice(0,4),+v.slice(5,7),+v.slice(8,10)))?v:"";
+      const skt=t(j.stt)||t(j.tett); return {skt, sktTur:t(j.stt)?"STT":(t(j.tett)?"TETT":""), ut:t(j.uretim), lot:typeof j.parti==="string"?j.parti:""};
+    } finally{ clearTimeout(sure); }
+  },
   async urunFotoOku(f, ilerle){ // dosya/blob → okunmuş alanlar (sayım ve ürün kartı için)
     const bm=await createImageBitmap(f); const c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0);
     return {R:await this.oku(c,null,ilerle), c};
@@ -1868,7 +1889,8 @@ function syBarkod(a){
   if(!lotId) lotId=syVarsayilanHedef(u.barkod);
   const kc=koliCarpan(a.gtin); const art=a.tartili?a.tartili.kg:(a.adetAI||1)*kc;
   if(kc>1) toast("Koli okutuldu: +"+kc+" "+u.birim);
-  SY.tarihAlindi=null; SY.sonArt=art; SY.taraTek=(art===1);
+  if(!SY.son||SY.son.barkod!==u.barkod) SY.fotolar=(SY.fotolar||[]).filter(g=>g.durum.startsWith("⏳"));
+  SY.tarihAlindi=null; SY.sonArt=art; SY.taraTek=(art===1); SY.taramaKey={barkod:u.barkod,lotId,art};
   syEkle(u.barkod, lotId, art, true);
 }
 // Tek hareket: barkoddan sonra kamera açık kalır; paketi çevirip tarihe tutunca tarih okunur ve sayım o tarihe geçer
@@ -1934,30 +1956,45 @@ function syHedefSec(barkod, yeniLot){
   }
   SY.son={barkod,lotId:yeniLot}; kaydet(); syCiz();
 }
+// Tarih resimleri art arda çekilebilir: her resim çekildiği anda sıraya girer ve "okutulan paket mi, yeni paket mi" o anda belirlenir.
+// Sonuç hangi sırayla gelirse gelsin her resim kendi paketini kendi tarihine yazar. Her resmin sonucu listede görünür, dokunarak düzeltilir.
 async function sySktFoto(barkod){
   const f=await gorselSec(true); if(!f) return; const s=V.aktifSayim;
-  const d=()=>$("#sySktDur"); const yaz=m=>{ const e=d(); if(e) e.innerHTML=m; };
-  yaz("⏳ Tarih okunuyor…");
+  const ilk=SY.tarihAlindi!==barkod; SY.tarihAlindi=barkod;
+  const art=SY.sonArt||1; const tk=SY.taramaKey&&SY.taramaKey.barkod===barkod?SY.taramaKey:{barkod,lotId:null,art};
+  SY.fotoNo=(SY.fotoNo||0)+1;
+  const g={no:SY.fotoNo, barkod, art, durum:"⏳ okunuyor", key:null};
+  if(!ilk){ // yeni paket: hemen say (tarih bilinmiyor), tarih gelince doğru tarihe taşı
+    g.key=syAnahtar(barkod,null); syEkleSessiz(barkod,null,g.art); }
+  else g.key=syAnahtar(barkod,tk.lotId);
+  g.lotId=ilk?tk.lotId:null;
+  (SY.fotolar=SY.fotolar||[]).push(g); sySonCiz();
   let c, fotoId=null;
-  try{ const bm=await createImageBitmap(f); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); fotoId=await fotoKaydet(c); }catch(e){ yaz("Resim açılamadı: "+esc(e.message||e)); return; }
+  try{ const bm=await createImageBitmap(f); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); fotoId=await fotoKaydet(c); }catch(e){ g.durum="Resim açılamadı"; sySonCiz(); return; }
   let skt="", ut="";
   try{
-    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=R.skt||""; ut=R.ut||"";
-      // tarih yazan yerde ürünün adı/çeşidi de yazıyorsa ürün kartındaki boşlukları doldur
-      const u=V.urunler[barkod]; if(u){ let deg=false; const yeniAd=R.ad&&(u.tanimsiz||!u.ad||(!u.uretici&&R.ad.length>u.ad.length)); if(yeniAd){ u.ad=R.ad; u.tanimsiz=false; deg=true; }
-        for(const [k,v] of [["marka",R.marka],["net",R.net],["uretici",R.uretici],["adres",R.adres],["isletme",R.isletme],["icerik",R.icerik]]) if(v&&!u[k]){ u[k]=v; deg=true; }
-        if(R.alerjen&&R.alerjen.length&&!(u.alerjen||[]).length){ u.alerjen=R.alerjen; deg=true; }
-        if(deg){ kaydet(); urunListesiGuncelle(); } } }
-    if(!skt){ const tm=await TarihMotoru.oku(c,null,(p,m)=>m&&yaz("⏳ "+esc(m))); skt=tm&&tm.R&&tm.R.skt||""; ut=ut||(tm&&tm.R&&tm.R.ut)||""; }
+    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.tarihOku(c); skt=R.skt||""; ut=R.ut||""; }
+    if(!skt){ const tm=await TarihMotoru.oku(c,null,null); skt=tm&&tm.R&&tm.R.skt||""; ut=ut||(tm&&tm.R&&tm.R.ut)||""; }
   }catch(e){ console.warn(e); }
-  if(skt && ut && skt<=ut) skt=""; // üretim tarihi STT sanılmasın
-  let gecmis=""; if(skt && gunFark(skt)<-60){ gecmis=skt; skt=""; } // 2027 → 2020 gibi yanlış okuma: çok eski tarih kabul edilmez
+  if(skt && ut && skt<=ut) skt="";
+  if(skt && gunFark(skt)<-60) skt="";
   if(V.aktifSayim!==s) return;
   s.fotolar=s.fotolar||{};
-  if(skt && ut){ s.ureTar=s.ureTar||{}; s.ureTar[barkod+"|"+skt]=ut; }
-  if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); const yeniPaket=syTarihAta(barkod,skt); bip(); yaz((yeniPaket?"➕ Yeni paket sayıldı. ":"")+"✅ STT/TETT: <b>"+trTarih(skt)+"</b>"+(ut?" · Üretim: <b>"+trTarih(ut)+"</b>":"")+". Yanlışsa doğru tarihe dokunun ya da yazın."); }
-  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz((gecmis?"Okunan tarih <b>"+trTarih(gecmis)+"</b> çok eski, yanlış okunmuş olabilir. ":ut?"Yalnız <b>üretim tarihi ("+trTarih(ut)+")</b> okunabildi, STT/TETT okunamadı. ":"Resim kaydedildi ama tarih okunamadı. ")+"STT/TETT'yi yazın (örn. 190127) ya da tarihe dokunun. İsterseniz yalnız STT/TETT yazan yeri yakından çekin."); SY.bekleyenFoto={barkod,fotoId}; }
+  if(skt){ if(ut){ s.ureTar=s.ureTar||{}; s.ureTar[barkod+"|"+skt]=ut; }
+    (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId);
+    syFotoTasi(g, sySktAnahtar(barkod,skt)); g.skt=skt; g.durum="✅ "+trTarih(skt); bip(); }
+  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); g.durum="❓ okunamadı – dokunup yazın"; bip(false); }
+  kaydet(); syCiz();
 }
+// sayılanı bir anahtardan diğerine taşı (log ile)
+function syEkleSessiz(barkod, lotId, art){ const s=V.aktifSayim; const k=syAnahtar(barkod,lotId); const x=s.sayilan[k]||(s.sayilan[k]={barkod,lotId,miktar:0}); x.miktar=yuvarla(x.miktar+art); if(x.miktar<=0) delete s.sayilan[k]; s.log.push({t:new Date().toISOString(),barkod,lotId,art}); }
+function syFotoTasi(g, yeniLot){ if((g.lotId||null)===(yeniLot||null)) return; const s=V.aktifSayim; const eski=s.sayilan[syAnahtar(g.barkod,g.lotId)]; const tas=Math.min(g.art, eski?eski.miktar:0);
+  if(tas>0){ syEkleSessiz(g.barkod,g.lotId,-tas); syEkleSessiz(g.barkod,yeniLot,tas); }
+  g.lotId=yeniLot; SY.hedef=SY.hedef||{}; SY.hedef[g.barkod]=yeniLot; SY.son={barkod:g.barkod,lotId:yeniLot}; }
+function syFotoDuzelt(no){ const g=(SY.fotolar||[]).find(x=>x.no===no); if(!g) return;
+  const b=dlg("Tarih resmi "+no+" · düzelt",`<p>Bu paketin STT/TETT'sini yazın (örn. <b>210728</b> ya da <b>21072028</b>).</p><input id="fdT" inputmode="numeric" style="font-size:22px;width:100%" value="${g.skt?trTarih(g.skt).replace(/\\./g,""):""}">`,
+    [{t:"Bu paketi sil",c:"danger",f:()=>{ syEkleSessiz(g.barkod,g.lotId,-g.art); g.durum="🗑 silindi"; g.art=0; kaydet(); syCiz(); }},{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const d=$("#fdT").value.replace(/\\D/g,""); let t=null; if(d.length===6) t=tarihGecerli(2000+(+d.slice(4,6)),+d.slice(2,4),+d.slice(0,2)); else if(d.length===8) t=tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)); if(!t){ toast("Tarih anlaşılamadı",1); return false; } syFotoTasi(g,sySktAnahtar(g.barkod,t)); g.skt=t; g.durum="✅ "+trTarih(t)+" (elle)"; kaydet(); syCiz(); }}]);
+  setTimeout(()=>{ const i=$("#fdT",b); i&&i.focus(); },60); }
 // kayıtlı bir barkoda 1-2 rakam farkla benzeyen okuma: kamera yanlış okumuş olabilir
 function syBenzer(kod){ if(!kod) return null; let en=null, ef=9;
   for(const b in V.urunler){ const u=V.urunler[b]; if(u.tanimsiz||b.length!==kod.length) continue; let f=0; for(let i=0;i<b.length&&f<=2;i++) if(b[i]!==kod[i]) f++; if(f<=2&&f<ef){ ef=f; en=u; } }
@@ -2064,6 +2101,7 @@ function sySonCiz(){
     ${adim(1,!u.tanimsiz,u.tanimsiz?"Ürünün adını yazın":"Barkod okundu",u.tanimsiz?`<div class="small" style="color:#b45309;font-weight:700">Bu barkod tanınmadı. Ad olmazsa sonradan hangi ürün olduğu bilinmez.</div><input id="syAdHizli" placeholder="Örn. Oba tel şehriye 5 kg" style="width:100%;font-size:17px;margin-top:4px"><div class="small muted">Yazıp klavyede Tamam'a basın.</div><button class="btn sm gold" id="syKoliMi" style="margin-top:6px">📦 Bu bir koli barkodu (ürün kayıtlı)</button>`:`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
     ${adim(2,!!u.gorselId&&!!u.uretici,"Etiketin resmi (arka yüz)",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId&&u.uretici?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId&&u.uretici?"Yeniden çek":"Etiketin resmini çek"}</button></div><div class="small muted" id="syAdDur">${u.uretici?"":"Ürün adı, içindekiler ve üreticinin yazdığı yüzü çekin. Claude bütün bilgileri kendisi doldurur; siz bir şey yazmazsınız."}</div>`)}
     ${adim(3,!!skt,"STT / TETT",`<div style="margin-top:4px"><button class="btn ${skt?"sm":"gold"}" id="sySktFoto">📸 ${skt?"Tarihin resmini yeniden çek":"Tarihin resmini çek"}</button>${sktFoto?' <span class="small">resim kaydedildi ✓</span>':""}</div>
+      ${(SY.fotolar||[]).filter(g=>g.barkod===barkod).length?`<div class="small" style="margin-top:6px;font-weight:700">Tarih resimleri (her biri 1 paket):</div><div class="skt-chips">${(SY.fotolar||[]).filter(g=>g.barkod===barkod).map(g=>`<button type="button" data-fno="${g.no}">${g.no}) ${esc(g.durum)}</button>`).join("")}</div><div class="small muted">Yanlış olana dokunup düzeltin. Resimleri art arda çekebilirsiniz.</div>`:""}
       <div class="small muted" id="sySktDur" style="margin-top:4px">${skt?"Seçili tarih: <b>"+trTarih(skt)+"</b>":"Resmi çekince tarih okunur. Okunamazsa aşağıdan seçin ya da yazın."}</div>
       <div class="skt-chips">${[...sec].map(([id,t])=>chip(id,(t?trTarih(t):"tarihsiz")+(id.startsWith("yeni:")?" (yeni)":""))).join("")}</div>
       <div class="inrow" style="margin-top:6px;gap:6px;align-items:center"><input id="syTarihYaz" inputmode="numeric" maxlength="10" placeholder="Tarihi yaz: 190127 ya da 19012027" style="max-width:190px;font-size:16px"></div>`)}
@@ -2080,6 +2118,7 @@ function sySonCiz(){
   const km=$("#syKoliMi"); if(km) km.onclick=()=>syKoliOlarakTani(barkod);
   const ah=$("#syAdHizli"); if(ah){ const kay=()=>{ const v=ah.value.trim(); if(!v) return; const uu=V.urunler[barkod]; if(!uu) return; uu.ad=v; uu.tanimsiz=false; kaydet(); urunListesiGuncelle(); syCiz(); toast("Ad kaydedildi"); }; ah.onchange=kay; ah.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); kay(); } }; }
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
+  $$("[data-fno]",e).forEach(b=>b.onclick=()=>syFotoDuzelt(+b.dataset.fno));
   // 190127 ya da 19012027 ya da 19.01.2027: 4 haneli yıl yazılırken yarıda (1901 20 → 2020) kapanmasın diye geçmiş yıl 6 hanede beklenir
   const ty=$("#syTarihYaz"); const tUygula=t=>{ ty.onblur=null; ty.oninput=null; ty.value=""; setTimeout(()=>{ const yp=syTarihAta(barkod,t); toast((yp?"Yeni paket sayıldı · ":"")+"Tarih: "+trTarih(t)); }); };
   const tCoz=(tam)=>{ const d=ty.value.replace(/\D/g,""); const yil=new Date().getFullYear();

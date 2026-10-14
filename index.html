@@ -2111,7 +2111,7 @@ function sySonCiz(){
     <details style="margin-top:6px"><summary class="small muted">Diğer işlemler</summary><div class="inrow" style="gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn sm" id="syAdYaz">✎ ${u.tanimsiz?"Adını yaz":"Düzenle"}</button><button class="btn sm" id="syEtiket">🤖 Arka etiketi Claude'a okut</button><button class="btn sm" id="syBilgi">ℹ Tüm bilgiler</button><button class="btn sm danger" id="sySil">🗑 Sayımdan çıkar</button></div></details>
     <div class="small" style="margin-top:8px;color:var(--deep);font-weight:700">Sonraki ürün için barkodu okutun.</div></div>`;
   gorselYukle(e);
-  $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>urunDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
+  $("#syBilgi").onclick=()=>urunDetay(barkod,V.aktifSayim.kres); $("#syEtiket").onclick=()=>syEtiketOku(barkod); $("#syAdYaz").onclick=()=>syMiktarDuzenle(barkod); $("#sySil").onclick=()=>syCikar(barkod);
   $("#syGorsel").onclick=async()=>{ const f=await gorselSec(true); if(!f) return; const uu=V.urunler[barkod]; if(!uu) return;
     try{ uu.gorselId=await gorselKaydet(f); kaydet(); }catch(e){ toast("Resim kaydedilemedi: "+e.message,1); return; }
     sySonCiz(); if(uu.tanimsiz||!uu.marka||!uu.net||!uu.uretici){ const e2=$("#syAdDur"); if(e2) e2.textContent="⏳ Claude ürünün adını okuyor…"; syEtiketOku(barkod,f,true); } };

@@ -1310,7 +1310,7 @@ class Kamera{
     const o=this.o;
     this.kap.innerHTML=`
       <div class="canli"><div class="cam"><video playsinline muted></video><div class="hedef"></div><div class="bos">Kamera kapalı<br><small>“Kamerayı aç”a basın, sonra barkodu çerçeveye tutun</small></div><div class="st" style="display:none"></div></div>
-      <div class="cam-bar"><button class="btn primary kAc" style="flex:1">📷 Kamerayı aç</button><button class="btn sm kKapat">Kapat</button><select class="kSec" title="Kamera"><option value="">Kamera seçin…</option></select></div>
+      <div class="cam-bar"><button class="btn primary kAc" style="flex:1">📷 Kamerayı aç</button><button class="btn gold kElle" title="Kamera okumuyorsa barkodun altındaki rakamları yazın">⌨ Barkod gir</button><button class="btn sm kKapat">Kapat</button><select class="kSec" title="Kamera"><option value="">Kamera seçin…</option></select></div>
       ${o.onFoto?'<div class="cam-bar"><button class="btn gold kFoto" style="flex:1">🗓 Tarihi oku <small>(ambalajın tarih yüzünü tutup basın)</small></button></div>':""}</div>
       <label class="btn big fotoCek"><span>${o.fotoMetin||"📸 Fotoğraf çek"}</span><small>${o.fotoAlt||"fotoğraftaki tüm barkodlar okunur"}</small><input type="file" class="kCek" accept="image/*" capture="environment" hidden></label>
       <div class="cam-bar"><label class="btn sm">🖼 Galeriden seç<input type="file" class="kDosya" accept="image/*" hidden></label></div>
@@ -1320,6 +1320,11 @@ class Kamera{
     $(".kKapat",this.kap).onclick=()=>this.kapat();
     $(".kSec",this.kap).onchange=e=>{ try{localStorage.setItem("b360kamera",e.target.value);}catch(_){} if(this.akis) this.ac(); };
     const fb=$(".kFoto",this.kap); if(fb) fb.onclick=()=>this.fotoCek();
+    $(".kElle",this.kap).onclick=()=>{ const b=dlg("Barkodu elle girin",`<p>Kamera okumuyorsa barkodun <b>altındaki rakamları</b> yazın.</p><input id="kbElle" inputmode="numeric" autocomplete="off" placeholder="8690000000000" style="font-size:24px;width:100%;letter-spacing:2px"><p class="small muted" id="kbElleDur"></p>`,
+        [{t:"Vazgeç"},{t:"Tamam",c:"primary",f:()=>{ const v=$("#kbElle").value.replace(/\D/g,""); if(!/^\d{8}$|^\d{12,14}$/.test(v)){ $("#kbElleDur").textContent="Barkod 8, 12, 13 ya da 14 rakam olmalı ("+v.length+" yazdınız)."; return false; }
+          if(kontrolHanesi(v.slice(0,-1))!==+v.slice(-1)){ $("#kbElleDur").innerHTML='<span class="neg">Son rakam tutmuyor; bir rakam yanlış yazılmış olabilir. Ambalajdan tekrar kontrol edin.</span>'; return false; }
+          setTimeout(()=>this.bildir([Object.assign(barkodCoz(v,"Elle"),{foto:true})]),30); }}]);
+      const i=$("#kbElle",b); setTimeout(()=>i&&i.focus(),60); i.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); [...$$("#dlgFoot button")].find(x=>x.textContent==="Tamam").click(); } }; };
     $(".kDosya",this.kap).onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) this.dosyaOku(f); };
     $(".kCek",this.kap).onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) this.dosyaOku(f); };
     if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)) $(".canli",this.kap).classList.add("gizli");

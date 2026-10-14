@@ -1867,6 +1867,7 @@ function syBarkod(a){
   if(!lotId) lotId=syVarsayilanHedef(u.barkod);
   const kc=koliCarpan(a.gtin); const art=a.tartili?a.tartili.kg:(a.adetAI||1)*kc;
   if(kc>1) toast("Koli okutuldu: +"+kc+" "+u.birim);
+  SY.tarihAlindi=null; SY.sonArt=art; SY.taraTek=(art===1);
   syEkle(u.barkod, lotId, art, true);
 }
 // Tek hareket: barkoddan sonra kamera açık kalır; paketi çevirip tarihe tutunca tarih okunur ve sayım o tarihe geçer
@@ -1912,6 +1913,13 @@ function syEkle(barkod, lotId, art, okutma){
   SY.son={barkod,lotId}; kaydet(); syCiz();
 }
 // STT/TETT seçilince: bu ürün için az önce art arda okutulanlar seçilen tarihe taşınır, sonrakiler de oraya sayılır
+// Tarih girildi: bu barkod okutulduktan sonra ilk tarihse okutulan paketin tarihi olur;
+// barkod yeniden okutulmadan ikinci kez tarih girilirse bu, aynı üründen BAŞKA bir paket demektir ve +1 (ya da +1 koli) sayılır.
+function syTarihAta(barkod, skt){
+  const hedef=sySktAnahtar(barkod,skt);
+  if(SY.tarihAlindi===barkod){ syEkle(barkod,hedef,SY.sonArt||1,true); SY.hedef=SY.hedef||{}; SY.hedef[barkod]=hedef; SY.son={barkod,lotId:hedef}; SY.tarihAlindi=barkod; syCiz(); return true; }
+  syHedefSec(barkod,hedef); SY.tarihAlindi=barkod; return false;
+}
 function syHedefSec(barkod, yeniLot){
   const s=V.aktifSayim; SY.hedef=SY.hedef||{}; SY.hedef[barkod]=yeniLot;
   if(SY.bekleyenFoto && SY.bekleyenFoto.barkod===barkod && yeniLot){ const t=syLotSkt(yeniLot); s.fotolar=s.fotolar||{}; (s.fotolar[barkod+"|"+t]=s.fotolar[barkod+"|"+t]||[]).push(SY.bekleyenFoto.fotoId); SY.bekleyenFoto=null; }
@@ -1946,7 +1954,7 @@ async function sySktFoto(barkod){
   if(V.aktifSayim!==s) return;
   s.fotolar=s.fotolar||{};
   if(skt && ut){ s.ureTar=s.ureTar||{}; s.ureTar[barkod+"|"+skt]=ut; }
-  if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); syHedefSec(barkod,sySktAnahtar(barkod,skt)); bip(); yaz("✅ STT/TETT: <b>"+trTarih(skt)+"</b>"+(ut?" · Üretim: <b>"+trTarih(ut)+"</b>":"")+". Yanlışsa doğru tarihe dokunun ya da yazın."); }
+  if(skt){ (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId); const yeniPaket=syTarihAta(barkod,skt); bip(); yaz((yeniPaket?"➕ Yeni paket sayıldı. ":"")+"✅ STT/TETT: <b>"+trTarih(skt)+"</b>"+(ut?" · Üretim: <b>"+trTarih(ut)+"</b>":"")+". Yanlışsa doğru tarihe dokunun ya da yazın."); }
   else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); kaydet(); bip(false); yaz((gecmis?"Okunan tarih <b>"+trTarih(gecmis)+"</b> çok eski, yanlış okunmuş olabilir. ":ut?"Yalnız <b>üretim tarihi ("+trTarih(ut)+")</b> okunabildi, STT/TETT okunamadı. ":"Resim kaydedildi ama tarih okunamadı. ")+"STT/TETT'yi yazın (örn. 190127) ya da tarihe dokunun. İsterseniz yalnız STT/TETT yazan yeri yakından çekin."); SY.bekleyenFoto={barkod,fotoId}; }
 }
 // kayıtlı bir barkoda 1-2 rakam farkla benzeyen okuma: kamera yanlış okumuş olabilir
@@ -2051,7 +2059,7 @@ function sySonCiz(){
   const ah=$("#syAdHizli"); if(ah){ const kay=()=>{ const v=ah.value.trim(); if(!v) return; const uu=V.urunler[barkod]; if(!uu) return; uu.ad=v; uu.tanimsiz=false; kaydet(); urunListesiGuncelle(); syCiz(); toast("Ad kaydedildi"); }; ah.onchange=kay; ah.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); kay(); } }; }
   $$("[data-hl]",e).forEach(b=>b.onclick=()=>syHedefSec(barkod,b.dataset.hl||null));
   // 190127 ya da 19012027 ya da 19.01.2027: 4 haneli yıl yazılırken yarıda (1901 20 → 2020) kapanmasın diye geçmiş yıl 6 hanede beklenir
-  const ty=$("#syTarihYaz"); const tUygula=t=>{ ty.onblur=null; ty.oninput=null; ty.value=""; setTimeout(()=>{ syHedefSec(barkod,sySktAnahtar(barkod,t)); toast("Tarih: "+trTarih(t)); }); };
+  const ty=$("#syTarihYaz"); const tUygula=t=>{ ty.onblur=null; ty.oninput=null; ty.value=""; setTimeout(()=>{ const yp=syTarihAta(barkod,t); toast((yp?"Yeni paket sayıldı · ":"")+"Tarih: "+trTarih(t)); }); };
   const tCoz=(tam)=>{ const d=ty.value.replace(/\D/g,""); const yil=new Date().getFullYear();
     if(d.length===8){ const t=tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)); if(t){ tUygula(t); return; } }
     if(d.length===6){ const y=2000+(+d.slice(4,6)); const t=tarihGecerli(y,+d.slice(2,4),+d.slice(0,2)); if(t && (y>=yil-1 || tam)){ tUygula(t); return; } }
@@ -2059,7 +2067,8 @@ function sySonCiz(){
   ty.oninput=()=>tCoz(false); ty.onkeydown=ev=>{ if(ev.key==="Enter"){ ev.preventDefault(); tCoz(true); } }; ty.onblur=()=>{ if(ty.isConnected && ty.value) tCoz(true); };
   $("#sySktFoto").onclick=()=>sySktFoto(barkod);
   $("#syEksi").onclick=()=>syEkle(barkod,lotId,-1); $("#syArti").onclick=()=>syEkle(barkod,lotId,1,true);
-  const ka=$("#syKoliArti"); if(ka){ ka.onclick=()=>syEkle(barkod,lotId,+u.koliAdet,true); $("#syKoliEksi").onclick=()=>syEkle(barkod,lotId,-u.koliAdet); }
+  const ka=$("#syKoliArti"); if(ka){ ka.onclick=()=>{ const ka2=+u.koliAdet; // barkod okutulup hemen "+1 koli" denirse okutulan tek paket koliye çevrilir (13 değil 12 olur)
+    if(SY.taraTek && SY.son && SY.son.barkod===barkod){ SY.taraTek=false; syEkle(barkod,lotId,ka2-1,true); } else syEkle(barkod,lotId,ka2,true); SY.sonArt=ka2; }; $("#syKoliEksi").onclick=()=>syEkle(barkod,lotId,-u.koliAdet); }
   const kt=$("#syKoliTanim"); if(kt) kt.onclick=ev=>{ ev.preventDefault(); urunDuzenle(barkod); };
   $("#sySay").onchange=ev=>{ const yeni=+ev.target.value||0; const eski=x?x.miktar:0; syEkle(barkod,lotId,yuvarla(yeni-eski)); };
 }

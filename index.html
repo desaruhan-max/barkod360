@@ -690,9 +690,16 @@ const DB = {
   sil(k){ return this.islem("readwrite", s=>s.delete(k)); },
   anahtarlar(){ return this.islem("readonly", s=>s.getAllKeys()); }
 };
-function bosVeri(){ return {surum:1, urunler:{}, lotlar:{}, hareketler:[], sayimlar:[], aktifSayim:null,
+function bosVeri(){ return {surum:1, urunler:{}, lotlar:{}, hareketler:[], sayimlar:[], aktifSayim:null, sayimBekleyen:{},
   ayar:{aktifKres:KRESLER[0], tedarikciler:TEDARIKCI_VARSAYILAN.slice(), sonYedek:null, icKodSayac:1}}; }
 let V = bosVeri();
+// Her kreşin yarım sayımı ayrı tutulur: kreş değişince açık sayım bekletmeye alınır, yeni kreşin bekleyen sayımı açılır
+function sayimKresAyarla(){ V.sayimBekleyen=V.sayimBekleyen||{}; const k=V.ayar.aktifKres;
+  if(V.aktifSayim && V.aktifSayim.kres!==k){ V.sayimBekleyen[V.aktifSayim.kres]=V.aktifSayim; V.aktifSayim=null; }
+  if(!V.aktifSayim && V.sayimBekleyen[k]){ V.aktifSayim=V.sayimBekleyen[k]; delete V.sayimBekleyen[k]; } }
+function kresDegis(k){ if(k===V.ayar.aktifKres) return; V.ayar.aktifKres=k; sayimKresAyarla();
+  if(typeof SY!=="undefined"){ SY.son=null; SY.hedef={}; SY.grup=null; SY.fotolar=[]; SY.tarihAlindi=null; SY.sonOkuma=null; if(SY.kam) SY.kam.kapat(); const sb=document.getElementById("syBody"); if(sb) sb.innerHTML=""; } }
+function yarimSayimlar(){ const o=[]; if(V.aktifSayim) o.push(V.aktifSayim); for(const k in (V.sayimBekleyen||{})) o.push(V.sayimBekleyen[k]); return o; }
 let KALAN = {};          // lotId -> kalan miktar (hareketlerden hesaplanır)
 let _kt=null;
 function kaydet(){ hesapla(); const d=senkFark(); clearTimeout(_kt); _kt=setTimeout(()=>{ yerelKaydet(); },120); if(d) setTimeout(senkCalis,400); }
@@ -1479,10 +1486,11 @@ SAYFA.konsol = { goster(){
   $("#kCikisSt").textContent="Bugün "+hb.filter(h=>CIKIS_TURLERI.includes(h.tur)).length+" çıkış";
   $("#kSktSt").textContent=gecti?gecti+" parti imha bekliyor":(yak?yak+" parti bu hafta dolacak":"Sorun yok");
   let ban="";
-  if(V.aktifSayim) ban+=`<div class="banner"><span>Yarım kalmış bir sayım var (${esc(V.aktifSayim.kres)}).</span><button class="btn sm" data-go="sayim">Sayıma dön</button></div>`;
+  yarimSayimlar().forEach(ys=>{ ban+=`<div class="banner"><span>Yarım kalmış sayım: <b>${esc(ys.kres)}</b> (${Object.keys(ys.sayilan||{}).length} kalem).</span><button class="btn sm" data-sykres="${esc(ys.kres)}">Sayıma dön</button></div>`; });
   const sy=V.ayar.sonYedek; const gun=sy?Math.floor((Date.now()-new Date(sy))/864e5):null;
   if(V.hareketler.length && (gun==null||gun>=7)) ban+=`<div class="banner"><span>${gun==null?"Henüz yedek alınmadı.":"Son yedek "+gun+" gün önce alındı."} Verilerinizi korumak için yedek alın.</span><button class="btn sm" data-go="yedek">Yedek al</button></div>`;
   $("#kBanner").innerHTML=ban;
+  $$("[data-sykres]",$("#kBanner")).forEach(b=>b.onclick=()=>{ kresDegis(b.dataset.sykres); kaydet(); kresCiz(); sekme("sayim"); });
 }};
 
 /* ================== MAL KABUL ================== */
@@ -2382,7 +2390,7 @@ SAYFA.skt = {
       ${r.map(l=>{ const u=V.urunler[l.barkod]||{}; const g=l.skt?gunFark(l.skt):null; return `<tr><td>${sktPill(l.skt)}</td><td><b>${l.sktTur||""}</b> ${trTarih(l.skt)}</td><td>${esc(urunAd(l.barkod))}${l.bloke?' <span class="pill bad">BLOKE</span>':""}</td><td>${esc(l.lot||"—")}</td><td class="m">${esc(KISA[l.kres])}</td><td class="r"><b>${nf(kalanOf(l.id))}</b> ${esc(u.birim||"")}</td><td class="r">${l.fiyat!=null?tl(kalanOf(l.id)*l.fiyat):""}</td>
         <td class="act">${g!=null&&g<0?`<button class="btn sm danger" data-imha="${l.id}">İmha kaydı</button>`:`<button class="btn sm" data-oncelik="${l.id}">Çıkış</button>`}</td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bu aralıkta parti yok</div>';
     $$("#sktTablo [data-imha]").forEach(b=>b.onclick=()=>imhaDlg(b.dataset.imha));
-    $$("#sktTablo [data-oncelik]").forEach(b=>b.onclick=()=>{ const l=V.lotlar[b.dataset.oncelik]; if(l.kres!==aktifKres()){ V.ayar.aktifKres=l.kres; kaydet(); } sekme("cikis"); CK.tur="CIKIS"; CK.barkod=l.barkod; CK.lotId=l.id; ckFormCiz(1); });
+    $$("#sktTablo [data-oncelik]").forEach(b=>b.onclick=()=>{ const l=V.lotlar[b.dataset.oncelik]; if(l.kres!==aktifKres()){ kresDegis(l.kres); kaydet(); } sekme("cikis"); CK.tur="CIKIS"; CK.barkod=l.barkod; CK.lotId=l.id; ckFormCiz(1); });
   }
 };
 function imhaDlg(id){
@@ -2574,11 +2582,12 @@ SAYFA.yedek = {
   try{ await DB.ac(); const v=await DB.al("veri"); if(v){ V=Object.assign(bosVeri(),v); V.ayar=Object.assign(bosVeri().ayar,v.ayar||{}); } }
   catch(e){ toast("Veri deposu açılamadı: "+e.message,1); }
   try{ if(gruplariDuzenle()) setTimeout(kaydet,2000); }catch(e){ console.warn(e); }
+  try{ sayimKresAyarla(); }catch(e){ console.warn(e); }
   hesapla(); await senkKur(); kresCiz(); urunListesiGuncelle();
   for(const k in SAYFA) SAYFA[k].ilk && SAYFA[k].ilk();
   $("#tabs").onclick=e=>{ const b=e.target.closest("button[data-tab]"); if(b) sekme(b.dataset.tab); };
   document.addEventListener("click",e=>{ const g=e.target.closest("[data-go]"); if(g) sekme(g.dataset.go); });
-  $("#kresSec").onclick=e=>{ const b=e.target.closest("button[data-k]"); if(!b) return; if(AKTIF_SEKME==="kabul" && KB.kirli && KB.barkod){ toast("Önce açık mal kabul formunu kaydedin ya da temizleyin",1); return; } V.ayar.aktifKres=b.dataset.k; kaydet(); kresCiz(); CK.barkod=""; if($("#ckForm")) $("#ckForm").innerHTML='<div class="empty">Çıkış yapılacak ürünün barkodunu okutun.</div>'; SAYFA[AKTIF_SEKME].goster&&SAYFA[AKTIF_SEKME].goster(); };
+  $("#kresSec").onclick=e=>{ const b=e.target.closest("button[data-k]"); if(!b) return; if(AKTIF_SEKME==="kabul" && KB.kirli && KB.barkod){ toast("Önce açık mal kabul formunu kaydedin ya da temizleyin",1); return; } kresDegis(b.dataset.k); kaydet(); kresCiz(); CK.barkod=""; if($("#ckForm")) $("#ckForm").innerHTML='<div class="empty">Çıkış yapılacak ürünün barkodunu okutun.</div>'; SAYFA[AKTIF_SEKME].goster&&SAYFA[AKTIF_SEKME].goster(); };
   $("#dlgX").onclick=dlgKapat;
   document.addEventListener("keydown",e=>{
     if($("#dlg").classList.contains("on")){ if(e.key==="Escape") dlgKapat(); return; }

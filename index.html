@@ -1148,7 +1148,9 @@ const ClaudeOkur = {
     const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.9));
     const istem=`Bu fotoğraf bir gıda ambalajındaki tarih baskısı. Bugün ${bugun()}. Yalnız gördüğünü yaz, tahmin etme.
 Türkiye'de gün önce yazılır (19.01.2027 = 2027-01-19). Yalnız ay/yıl varsa ayın son günü. Nokta vuruşlu baskıda 0/O, 1/I, 5/S, 7/1, 8/B karışıklığına dikkat et; yılı özellikle dikkatli oku.
-STT/SKT/Son Tüketim/EXP → stt; TETT/Tavsiye Edilen/Best before → tett; ÜT/Üretim/Prod → uretim. Türü yazmayan iki tarihte erken olan üretim, geç olan son tüketimdir.
+STT/SKT/Son Tüketim/EXP → stt; TETT/Tavsiye Edilen/Best before → tett; ÜT/Üretim/Prod → uretim.
+Etiket el yazısı olabilir (kavanoz, kap, bant üzerine kalemle yazılmış). Alt alta iki tarih varsa ve türü yazmıyorsa: ÜSTTEKİ kaba/kavanoza konma tarihidir (uretim alanına yaz), ALTTAKİ son tüketim tarihidir (stt). Her durumda GEÇ olan tarih son tüketimdir.
+El yazısında yıl iki haneli olabilir (15.10.27 = 2027-10-15).
 Yalnız şu JSON: {"stt":null,"tett":null,"uretim":null,"parti":null}`;
     const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),30000);
     try{
@@ -1160,7 +1162,10 @@ Yalnız şu JSON: {"stt":null,"tett":null,"uretim":null,"parti":null}`;
         const d=await y.json().catch(()=>({})); if(!y.ok) throw new Error(y.status===401?"Anahtar geçersiz":((d.error&&d.error.message)||("HTTP "+y.status)));
         const m=(d.content||[]).map(x=>x.text||"").join(""); const a=m.indexOf("{"), z=m.lastIndexOf("}"); j=JSON.parse(m.slice(a,z+1)); }
       const t=v=>(typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&tarihGecerli(+v.slice(0,4),+v.slice(5,7),+v.slice(8,10)))?v:"";
-      const skt=t(j.stt)||t(j.tett); return {skt, sktTur:t(j.stt)?"STT":(t(j.tett)?"TETT":""), ut:t(j.uretim), lot:typeof j.parti==="string"?j.parti:""};
+      let skt=t(j.stt)||t(j.tett), ut=t(j.uretim);
+      if(skt && ut && skt<ut){ const x=skt; skt=ut; ut=x; } // son tüketim her zaman geç olandır
+      if(!skt && ut && gunFark(ut)>0){ skt=ut; ut=""; } // tek tarih ve ileri bir tarihse son tüketimdir
+      return {skt, sktTur:t(j.stt)?"STT":(t(j.tett)?"TETT":""), ut, lot:typeof j.parti==="string"?j.parti:""};
     } finally{ clearTimeout(sure); }
   },
   // Barkodsuz ürün: fotoğraftaki gıdanın kısa adını söyle (kavanozdaki kuru üzüm, bulgur vb.)
@@ -2007,13 +2012,14 @@ async function sySktFoto(barkod){
     if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.tarihOku(c); skt=R.skt||""; ut=R.ut||""; }
     if(!skt){ const tm=await TarihMotoru.oku(c,null,null); skt=tm&&tm.R&&tm.R.skt||""; ut=ut||(tm&&tm.R&&tm.R.ut)||""; }
   }catch(e){ console.warn(e); }
-  if(skt && ut && skt<=ut) skt="";
+  if(skt && ut && skt<ut){ const x=skt; skt=ut; ut=x; } // geç olan son tüketimdir
+  if(skt && ut && skt===ut) ut="";
   if(skt && gunFark(skt)<-60) skt="";
   if(V.aktifSayim!==s) return;
   s.fotolar=s.fotolar||{};
   if(skt){ if(ut){ s.ureTar=s.ureTar||{}; s.ureTar[barkod+"|"+skt]=ut; }
     (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId);
-    syFotoTasi(g, sySktAnahtar(barkod,skt)); g.skt=skt; g.durum="✅ "+trTarih(skt); bip(); }
+    syFotoTasi(g, sySktAnahtar(barkod,skt)); g.skt=skt; g.durum="✅ "+trTarih(skt)+(ut?" (konma/üretim "+trTarih(ut)+")":""); bip(); }
   else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); g.durum="❓ okunamadı – dokunup yazın"; bip(false); }
   kaydet(); syCiz();
 }

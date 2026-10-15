@@ -2378,7 +2378,7 @@ function syTutanakExcel(k,satir){
   satir.forEach((x,i)=>{ const t=syTutanakSktMin(x); const r=xlsxSktRenk(t); const ft=x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null);
     rows.push(xlsxSatirBoya([i+1,x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",x.skt||"",t?{v:tarihNesne(t),s:XLSX_STIL.tarih}:"",t?gunFark(t):"",t?r.ad:"Tarih yok",x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r)); });
   rows.push([{v:"Toplam fark: "+tl(k.farkTutar),s:XLSX_STIL.kalin}]);
-  indir("sayim_"+KISA[k.kres]+"_"+k.bit.slice(0,10)+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,34,16,16,8,9,9,16,30,14,10,16,19,9,10,11],satirlar:rows,donuk:3}]));
+  indir("stok sayım "+trTarih(k.bit.slice(0,10))+" "+k.kres+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,34,16,16,8,9,9,16,30,14,10,16,19,9,10,11],satirlar:rows,donuk:3}]));
   toast("Excel dosyası indirildi (İndirilenler)"); }
 function syTutanak(k){
   const satir=syTutanakSira(k.satirlar);
@@ -2441,7 +2441,7 @@ SAYFA.stok = {
     const blob=xlsxOlustur([
       {ad:"Stok",sutunlar:[6,34,16,12,16,9,8,18,10,14,10,18],satirlar:s1,donuk:3,birlesik:["A1:L1"]},
       {ad:"Partiler (STT-TETT)",sutunlar:[30,14,...(tum?[10]:[]),16,13,12,13,10,9,8,18],satirlar:s2,donuk:3}]);
-    indir("BARKOD360_stok_"+(tum?"TUM":KISA[aktifKres()])+"_"+bugun()+".xlsx",blob);
+    indir("stok durumu "+trTarih(bugun())+" "+(tum?"tüm kreşler":aktifKres())+".xlsx",blob);
     toast("Excel dosyası indirildi (İndirilenler)"); }
 };
 function urunDetay(barkod, kres){

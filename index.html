@@ -591,7 +591,7 @@ function grupTahmin(u){ const t=((u.ad||"")+" "+(u.icerik||"").slice(0,60)).toLo
 function gruplariDuzenle(){ let deg=false; for(const u of Object.values(V.urunler)){ if(GRUP_ESKI[u.grup]){ u.grup=GRUP_ESKI[u.grup]; deg=true; }
     if((!u.grup||u.grup==="Muhtelif Gıda") && !u.tanimsiz){ const g=grupTahmin(u); if(g){ u.grup=g; u.grupOto=true; deg=true; } } } return deg; }
 const TEDARIKCI_VARSAYILAN = ["Semet Gıda","Mali Gıda"];
-const BIRIMLER = ["adet","paket","kg","lt","koli","kutu","şişe","kavanoz","teneke","bağ"];
+const BIRIMLER = ["adet","paket","kg","g","lt","koli","kutu","şişe","kavanoz","teneke","bağ"];
 const SAKLAMA = {oda:"Oda sıcaklığı (serin, kuru)", soguk:"Soğukta (0–4 °C)", donuk:"Donuk (−18 °C ve altı)"};
 const ALERJENLER = ["Gluten","Kabuklular","Yumurta","Balık","Yer fıstığı","Soya","Süt (laktoz)","Sert kabuklu meyveler","Kereviz","Hardal","Susam","Sülfit","Acı bakla","Yumuşakçalar"];
 const TURLER = {
@@ -1159,6 +1159,14 @@ Yalnız şu JSON: {"stt":null,"tett":null,"uretim":null,"parti":null}`;
       const t=v=>(typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&tarihGecerli(+v.slice(0,4),+v.slice(5,7),+v.slice(8,10)))?v:"";
       const skt=t(j.stt)||t(j.tett); return {skt, sktTur:t(j.stt)?"STT":(t(j.tett)?"TETT":""), ut:t(j.uretim), lot:typeof j.parti==="string"?j.parti:""};
     } finally{ clearTimeout(sure); }
+  },
+  // Barkodsuz ürün: fotoğraftaki gıdanın kısa adını söyle (kavanozdaki kuru üzüm, bulgur vb.)
+  async gidaAdi(canvas){
+    const k=Math.min(1,1000/Math.max(canvas.width,canvas.height)); const c=document.createElement("canvas"); c.width=Math.round(canvas.width*k); c.height=Math.round(canvas.height*k); c.getContext("2d").drawImage(canvas,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.85));
+    const istem='Bu fotoğrafta bir kreş mutfağındaki etiketsiz bir gıda (kavanoz, kap, poşet içinde) var. Gıdanın kısa Türkçe adını yaz (örn. "Kuru üzüm", "Pirinç", "Kırmızı mercimek", "Tahin"). Üzerinde elle yazılmış bir ad varsa onu kullan. Emin değilsen null. Yalnız şu JSON: {"ad":null}';
+    const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),25000);
+    try{ const j=ARTIFACT? await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal}) : await this.api(istem,blob,ctl.signal); return (j&&typeof j.ad==="string")?j.ad.trim():""; } finally{ clearTimeout(sure); }
   },
   async urunFotoOku(f, ilerle){ // dosya/blob → okunmuş alanlar (sayım ve ürün kartı için)
     const bm=await createImageBitmap(f); const c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0);
@@ -2043,19 +2051,33 @@ function syKoliOlarakTani(koliKod){
 // Bir kez tanıtılan barkodsuz ürün sonraki sayımlarda listeden seçilir.
 function syBarkodsuz(){
   const mevcut=Object.values(V.urunler).filter(u=>u.barkodsuz||/^20\d{11}$/.test(u.barkod)).sort((a,b)=>a.ad.localeCompare(b.ad,"tr"));
-  const b=dlg("🫙 Barkodsuz ürün",`<p class="hint" style="margin-top:0">Kavanoza, kaba konmuş; barkodu ve etiketi olmayan ürünler için.</p>
-    ${mevcut.length?`<div class="small" style="font-weight:700">Daha önce tanıtılanlar:</div><div class="skt-chips" style="margin-bottom:10px">${mevcut.map(u=>`<button type="button" data-bs="${esc(u.barkod)}">${esc(u.ad)}</button>`).join("")}</div><div class="small" style="font-weight:700">Ya da yeni ürün:</div>`:""}
-    <label class="f">Ürünün adı<input id="bsAd" placeholder="Örn. Kuru üzüm (kavanoz)" style="font-size:17px"></label>
-    <label class="f">Birim<select id="bsBirim" style="font-size:16px">${BIRIMLER.map(x=>`<option${x==="kg"?" selected":""}>${x}</option>`).join("")}</select></label>
-    <p class="small muted">Sonraki ekranda resmini ve elle yazılmış tarihin resmini çekersiniz; tarihi Claude okur ya da siz yazarsınız.</p>`,
-    [{t:"Vazgeç"},{t:"Devam",c:"primary",f:()=>{ const ad=$("#bsAd").value.trim(); if(!ad){ toast("Ürünün adını yazın ya da listeden seçin",1); return false; }
-      const ayni=mevcut.find(u=>u.ad.toLocaleLowerCase("tr")===ad.toLocaleLowerCase("tr"));
-      let kod; if(ayni) kod=ayni.barkod; else { do{ const g="20"+String(Math.floor(Math.random()*1e10)).padStart(10,"0"); kod=g+kontrolHanesi(g); }while(V.urunler[kod]);
-        V.urunler[kod]={barkod:kod,ad,barkodsuz:true,birim:$("#bsBirim").value,grup:"Muhtelif Gıda",saklama:"oda",alerjen:[],uretici:"(barkodsuz / açık ürün)",olusturma:new Date().toISOString(),son:{}};
-        const g=grupTahmin(V.urunler[kod]); if(g){ V.urunler[kod].grup=g; V.urunler[kod].grupOto=true; } kaydet(); urunListesiGuncelle(); }
-      setTimeout(()=>syBarkod({gtin:kod,ham:kod,ai:{},format:"İç kod",foto:true}),30); }}]);
-  $$("[data-bs]",b).forEach(x=>x.onclick=()=>{ dlgKapat(); const kod=x.dataset.bs; setTimeout(()=>syBarkod({gtin:kod,ham:kod,ai:{},format:"İç kod",foto:true}),30); });
-  setTimeout(()=>{ const i=$("#bsAd",b); i&&!mevcut.length&&i.focus(); },60);
+  let secili=null, foto=null;
+  const b=dlg("🫙 Barkodsuz ürün",`<p class="hint" style="margin-top:0">Kavanoza, kaba konmuş; barkodu ve etiketi olmayan ürünler.</p>
+    <div style="display:flex;gap:10px;align-items:center"><img id="bsImg" alt="" style="display:none;width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><button type="button" class="btn primary" id="bsFoto" style="flex:1">📸 Ürünün resmini çek</button></div>
+    <div class="small muted" id="bsDur" style="margin:4px 0 8px"></div>
+    ${mevcut.length?`<div class="small" style="font-weight:700">Daha önce tanıtılanlar:</div><div class="skt-chips" style="margin-bottom:8px">${mevcut.map(u=>`<button type="button" data-bs="${esc(u.barkod)}">${esc(u.ad)}</button>`).join("")}</div>`:""}
+    <label class="f">Ürünün adı<input id="bsAd" placeholder="Resmi çekince Claude yazar; siz de yazabilirsiniz" style="font-size:17px"></label>
+    <div class="inrow" style="gap:8px;align-items:flex-end"><label class="f" style="flex:1">Miktar (gramaj)<input id="bsMik" type="number" min="0" step="any" inputmode="decimal" placeholder="Örn. 750" style="font-size:20px"></label>
+    <label class="f" style="width:110px">Birim<select id="bsBirim" style="font-size:16px">${["g","kg","adet","lt","kavanoz","paket"].map(x=>`<option${x==="g"?" selected":""}>${x}</option>`).join("")}</select></label></div>
+    <p class="small muted">Sonraki ekranda elle yazılmış tarihin resmini çekersiniz.</p>`,
+    [{t:"Vazgeç"},{t:"Devam",c:"primary",f:()=>{ const ad=$("#bsAd").value.trim(); const mik=+$("#bsMik").value||0; const birim=$("#bsBirim").value;
+      if(!ad){ toast("Ürünün adını yazın, resmini çekin ya da listeden seçin",1); return false; }
+      let u=secili&&V.urunler[secili]; if(!u){ u=mevcut.find(x=>x.ad.toLocaleLowerCase("tr")===ad.toLocaleLowerCase("tr")&&x.birim===birim); }
+      let kod;
+      if(u){ kod=u.barkod; if(ad && u.ad!==ad){ u.ad=ad; } }
+      else { do{ const g="20"+String(Math.floor(Math.random()*1e10)).padStart(10,"0"); kod=g+kontrolHanesi(g); }while(V.urunler[kod]);
+        u=V.urunler[kod]={barkod:kod,ad,barkodsuz:true,birim,grup:"Muhtelif Gıda",saklama:"oda",alerjen:[],uretici:"(barkodsuz / açık ürün)",olusturma:new Date().toISOString(),son:{}};
+        const g=grupTahmin(u); if(g){ u.grup=g; u.grupOto=true; } }
+      if(foto) u.gorselId=foto;
+      kaydet(); urunListesiGuncelle();
+      setTimeout(()=>syBarkod({gtin:kod,ham:kod,ai:{},format:"İç kod",foto:true,adetAI:mik>0?mik:1}),30); }}]);
+  $$("[data-bs]",b).forEach(x=>x.onclick=()=>{ secili=x.dataset.bs; const u=V.urunler[secili]; $$("[data-bs]",b).forEach(y=>y.classList.toggle("on",y===x)); $("#bsAd",b).value=u.ad; if(BIRIMLER.includes(u.birim)) $("#bsBirim",b).value=u.birim; $("#bsMik",b).focus(); });
+  $("#bsFoto",b).onclick=async()=>{ const f=await gorselSec(true); if(!f) return; const d=$("#bsDur",b);
+    try{ const bm=await createImageBitmap(f); const c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0);
+      foto=await gorselKaydet(c); const im=$("#bsImg",b); im.src=URL.createObjectURL(f); im.style.display="";
+      if(await ClaudeOkur.kullanilabilir()){ d.textContent="⏳ Claude ürünü tanıyor…"; const ad=await ClaudeOkur.gidaAdi(c); if(ad){ if(!$("#bsAd",b).value) $("#bsAd",b).value=ad; d.innerHTML="✅ Claude: <b>"+esc(ad)+"</b> · yanlışsa düzeltin. Şimdi miktarı yazın."; } else d.textContent="Claude ürünü tanıyamadı, adını yazın."; }
+      else d.textContent="Resim kaydedildi. Adını yazın.";
+      $("#bsMik",b).focus(); }catch(e){ d.textContent="Okunamadı: "+(e.message||e); } };
 }
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;

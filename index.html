@@ -2007,11 +2007,13 @@ async function sySktFoto(barkod){
   (SY.fotolar=SY.fotolar||[]).push(g); syOlay(barkod,"tarihFoto",{no:g.no}); sySonCiz();
   let c, fotoId=null;
   try{ const bm=await createImageBitmap(f); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); fotoId=await fotoKaydet(c); }catch(e){ g.durum="Resim açılamadı"; sySonCiz(); return; }
-  let skt="", ut="";
+  let skt="", ut="", neden="";
   try{
-    if(await ClaudeOkur.kullanilabilir()){ const R=await ClaudeOkur.tarihOku(c); skt=R.skt||""; ut=R.ut||""; }
+    if(await ClaudeOkur.kullanilabilir()){ try{ const R=await ClaudeOkur.tarihOku(c); skt=R.skt||""; ut=R.ut||""; if(!skt) neden=R.ut?"Claude yalnız "+trTarih(R.ut)+" okudu":"Claude tarih bulamadı"; }catch(e){ neden="Claude hatası: "+(e.name==="AbortError"?"zaman aşımı (internet yavaş)":(e.message||e)); } }
+    else neden=navigator.onLine?"Claude anahtarı yok":"internet yok";
     if(!skt){ const tm=await TarihMotoru.oku(c,null,null); skt=tm&&tm.R&&tm.R.skt||""; ut=ut||(tm&&tm.R&&tm.R.ut)||""; }
   }catch(e){ console.warn(e); }
+  if(!skt) taniKaydet({t:new Date().toISOString(),olay:"syTarih",barkod,skt,ut,neden},c);
   if(skt && ut && skt<ut){ const x=skt; skt=ut; ut=x; } // geç olan son tüketimdir
   if(skt && ut && skt===ut) ut="";
   if(skt && gunFark(skt)<-60) skt="";
@@ -2020,7 +2022,7 @@ async function sySktFoto(barkod){
   if(skt){ if(ut){ s.ureTar=s.ureTar||{}; s.ureTar[barkod+"|"+skt]=ut; }
     (s.fotolar[barkod+"|"+skt]=s.fotolar[barkod+"|"+skt]||[]).push(fotoId);
     syFotoTasi(g, sySktAnahtar(barkod,skt)); g.skt=skt; g.durum="✅ "+trTarih(skt)+(ut?" (konma/üretim "+trTarih(ut)+")":""); bip(); }
-  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); g.durum="❓ okunamadı – dokunup yazın"; bip(false); }
+  else { (s.fotolar[barkod+"|?"]=s.fotolar[barkod+"|?"]||[]).push(fotoId); g.durum="❓ okunamadı"+(neden?" ("+neden+")":"")+" – dokunup yazın"; bip(false); }
   kaydet(); syCiz();
 }
 // sayılanı bir anahtardan diğerine taşı (log ile)

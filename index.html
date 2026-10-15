@@ -1126,6 +1126,17 @@ window.tarihOku = async c => { const x=await TarihMotoru.oku(c,null,null); retur
 /* ================== CLAUDE İLE ETİKET OKUMA (internet varken) ==================
    Nokta vuruşlu tarih kodları, eğri ambalaj, küçük yazı: Claude görüntüyü okur ve alanları JSON döndürür.
    İnternet yoksa ya da izin verilmezse cihazdaki yazı okuma motoru kullanılır. */
+// Claude yanıtından JSON çıkar; yanıt kesik ya da açıklamalı gelse bile alanları ve tarihleri kurtar
+function claudeJsonCoz(m){
+  m=String(m||""); const a=m.indexOf("{"), z=m.lastIndexOf("}");
+  if(a>=0&&z>a){ try{ return JSON.parse(m.slice(a,z+1)); }catch(e){} }
+  const j={}; const al=k=>{ const r=m.match(new RegExp('"'+k+'"\\s*:\\s*"([^"]*)"')); return r?r[1]:null; };
+  for(const k of ["stt","tett","uretim","saat","parti"]) j[k]=al(k);
+  if(!j.stt&&!j.tett&&!j.uretim){ // JSON yoksa metindeki gg.aa.yyyy tarihlerini al; geç olan son tüketim
+    const ts=[...m.matchAll(/\b(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4}|\d{2})\b/g)].map(x=>{ const y=x[3].length===2?2000+(+x[3]):+x[3]; return tarihGecerli(y,+x[2],+x[1]); }).filter(Boolean).sort();
+    if(ts.length){ j.stt=ts[ts.length-1]; if(ts.length>1&&ts[0]!==j.stt) j.uretim=ts[0]; } }
+  if(!j.stt&&!j.tett&&!j.uretim) throw new Error("Claude yanıtında tarih yok"+(m?": "+m.slice(0,60):" (boş yanıt)"));
+  return j; }
 const ClaudeOkur = {
   s:null, kapali:false, hazir:null,
   anahtar:"",
@@ -1140,7 +1151,7 @@ const ClaudeOkur = {
     const d=await y.json().catch(()=>({}));
     if(!y.ok){ const m=(d.error&&d.error.message)||("HTTP "+y.status); const e=new Error(y.status===401?"Anahtar geçersiz":(y.status===400&&/credit/i.test(m)?"Kredi bitmiş":m)); e.code=y.status===401?"anahtar":"api"; if(y.status===401) this.kapali=true; throw e; }
     const metin=(d.content||[]).map(c=>c.text||"").join(""); const a=metin.indexOf("{"), z=metin.lastIndexOf("}");
-    if(a<0||z<a) throw new Error("Claude yanıtı okunamadı"); return JSON.parse(metin.slice(a,z+1));
+    if(a<0||z<a) throw new Error("Claude yanıtı okunamadı"); try{ return JSON.parse(metin.slice(a,z+1)); }catch(e){ throw new Error("Claude yanıtı yarım geldi"); }
   },
   // Yalnız tarih: küçük resim + kısa yanıt → çok daha hızlı (sayımda art arda çekim için)
   async tarihOku(canvas){
@@ -1152,16 +1163,16 @@ STT/SKT/Son Tüketim/EXP → stt; TETT/Tavsiye Edilen/Best before → tett; ÜT/
 Etiket el yazısı olabilir (kavanoz, kap, bant üzerine kalemle yazılmış). Alt alta iki tarih varsa ve türü yazmıyorsa: ÜSTTEKİ kaba/kavanoza konma tarihidir (uretim alanına yaz), ALTTAKİ son tüketim tarihidir (stt). Her durumda GEÇ olan tarih son tüketimdir.
 El yazısında yıl iki haneli olabilir (15.10.27 = 2027-10-15).
 parti: "Parti", "Lot", "L", "P", "P.No", "Seri", "Batch" yanındaki kod (harf ve rakamlarıyla, aynen). saat: tarihin yanında basılı saat (örn. 14:35) varsa SS:DD olarak.
-Yalnız şu JSON: {"stt":null,"tett":null,"uretim":null,"saat":null,"parti":null}`;
+Açıklama yazma, düşünceni yazma; YALNIZ şu JSON'u yaz: {"stt":null,"tett":null,"uretim":null,"saat":null,"parti":null}`;
     const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),30000);
     try{
       let j;
       if(ARTIFACT) j=await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal});
       else { const b64=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(",")[1]); fr.onerror=rej; fr.readAsDataURL(blob); });
         const y=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal:ctl.signal,headers:{"content-type":"application/json","x-api-key":this.anahtar,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-          body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:160,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
+          body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:1000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
         const d=await y.json().catch(()=>({})); if(!y.ok) throw new Error(y.status===401?"Anahtar geçersiz":((d.error&&d.error.message)||("HTTP "+y.status)));
-        const m=(d.content||[]).map(x=>x.text||"").join(""); const a=m.indexOf("{"), z=m.lastIndexOf("}"); j=JSON.parse(m.slice(a,z+1)); }
+        const m=(d.content||[]).map(x=>x.text||"").join(""); j=claudeJsonCoz(m); }
       const t=v=>(typeof v==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&tarihGecerli(+v.slice(0,4),+v.slice(5,7),+v.slice(8,10)))?v:"";
       let skt=t(j.stt)||t(j.tett), ut=t(j.uretim);
       if(skt && ut && skt<ut){ const x=skt; skt=ut; ut=x; } // son tüketim her zaman geç olandır

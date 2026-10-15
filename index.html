@@ -2137,11 +2137,25 @@ function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, inte
     else toast("Bu ürünün adı bulunamadı. Sayıma devam edin, adı sonra Ürünler sayfasından yazılır.",1);
   }).catch(()=>toast("İnternet yok. Ürün sayıldı, adı sonra yazılır.",1));
 }
+// ek sayım: bağlı olduğu bitmiş sayımda sayılmış barkodlar
+function syEkOnceki(s){ if(!s||!s.ekId) return new Set(); const k=V.sayimlar.find(x=>x.id===s.ekId); return new Set(k?k.satirlar.filter(r=>r.ilkSaat||r.sayimSaati||r.sayilan).map(r=>r.barkod):[]); }
+// "15.10.2027: 2, tarihsiz: 1" metinlerini birleştir; aynı tarihler toplanır
+function syDagTopla(a,b){ const m=new Map(); const sayi=v=>+String(v).replace(/\./g,"").replace(",","."); for(const t of [a,b]) String(t||"").split(/,\s(?=[^,]*:)/).forEach(p=>{ const i=p.lastIndexOf(":"); if(i<0) return; const k=p.slice(0,i).trim(); const n=sayi(p.slice(i+1).trim()); if(!k||isNaN(n)) return; m.set(k,(m.get(k)||0)+n); });
+  const z=k=>k==="tarihsiz"?"9":k.split(".").reverse().join("-"); return [...m.entries()].sort((x,y)=>z(x[0]).localeCompare(z(y[0]))).map(([k,n])=>k+": "+nf(yuvarla(n))).join(", "); }
+function syEkBaslat(id){
+  const k=V.sayimlar.find(x=>x.id===id); if(!k) return;
+  if(V.aktifSayim||(V.sayimBekleyen||{})[k.kres]){ toast(k.kres+" için devam eden bir sayım var. Önce onu bitirin.",1); return; }
+  if(aktifKres()!==k.kres) kresDegis(k.kres);
+  SY.hedef={}; SY.grup=null; SY.son=null; SY.fotolar=[];
+  V.aktifSayim={id:uid("s"),ekId:k.id,kres:k.kres,bas:new Date().toISOString(),sayan:k.sayan,not:k.not,sayilan:{},log:[]};
+  kaydet(); dlgKapat(); sekme("sayim"); setTimeout(()=>{ syCiz(); SY.kam&&SY.kam.ac(); },60);
+  toast("Ekleme açıldı: okuttuğunuz ürünler "+trTarih(k.bit.slice(0,10))+" sayımına eklenecek"); }
 function sySatirlar(){
-  const s=V.aktifSayim; const bk=new Set();
-  Object.values(V.lotlar).forEach(l=>{ if(l.kres===s.kres && kalanOf(l.id)>0) bk.add(l.barkod); });
+  const s=V.aktifSayim; const bk=new Set(); const onceki=syEkOnceki(s);
+  if(!s.ekId) Object.values(V.lotlar).forEach(l=>{ if(l.kres===s.kres && kalanOf(l.id)>0) bk.add(l.barkod); }); // ekte yalnız okutulanlar
   Object.values(s.sayilan).forEach(x=>bk.add(x.barkod));
-  return [...bk].map(b=>{ const u=V.urunler[b]||{ad:b,birim:""}; const sis=stokOf(b,s.kres); const say=syUrunSayilan(s,b); const okutuldu=Object.values(s.sayilan).some(x=>x.barkod===b);
+  return [...bk].map(b=>{ const u=V.urunler[b]||{ad:b,birim:""}; const sis=stokOf(b,s.kres); const okutuldu=Object.values(s.sayilan).some(x=>x.barkod===b);
+    const say=onceki.has(b)?yuvarla(sis+syUrunSayilan(s,b)):syUrunSayilan(s,b); // önceki sayımda sayılmış ürün: üstüne eklenir
     const fiyat=syFiyat(b,s.kres); return {b,u,sis,say,okutuldu,fark:yuvarla(say-sis),fiyat}; })
     .map(x=>Object.assign(x,{zaman:syZaman(s,x.b)}))
     .sort((a,b)=>(b.okutuldu-a.okutuldu)||(b.zaman.son||"").localeCompare(a.zaman.son||"")||a.u.ad.localeCompare(b.u.ad,"tr"));
@@ -2156,13 +2170,15 @@ function syCiz(){
     gv.innerHTML=`<div class="card"><h3>Yeni sayım başlat · ${esc(aktifKres())}</h3><p class="hint">Rafları sırayla okutun. Her okutma 1 sayılır. Kilo ile tartılan üründe miktarı listede değiştirebilirsiniz. Sayım yarıda kalırsa kaldığı yerden devam eder.</p>
       <div class="fg"><label class="f">Sayımı yapan<input id="sy_sayan" placeholder="Ad soyad"></label><label class="f">Not<input id="sy_not" placeholder="Örn. ay sonu sayımı"></label></div>
       <button class="btn primary" id="syBasla">Sayımı başlat</button></div>
-      <div class="card"><h3>Geçmiş sayımlar</h3>${V.sayimlar.filter(x=>x.kres===aktifKres()).length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Sayan</th><th class="r">Kalem</th><th class="r">Farklı kalem</th><th class="r">Fark tutarı</th><th></th></tr></thead><tbody>${V.sayimlar.filter(x=>x.kres===aktifKres()).slice().reverse().map(x=>`<tr><td>${trTarihSaat(x.bit)}</td><td>${esc(x.sayan||"")}</td><td class="r">${x.satirlar.length}</td><td class="r">${x.satirlar.filter(r=>r.fark).length}</td><td class="r ${x.farkTutar<0?"neg":""}">${tl(x.farkTutar)}</td><td class="act"><button class="btn sm" data-tut="${x.id}">Tutanak</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Bu kreşte henüz sayım yapılmadı</div>'}</div>`;
+      <div class="card"><h3>Geçmiş sayımlar</h3>${V.sayimlar.filter(x=>x.kres===aktifKres()).length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Sayan</th><th class="r">Kalem</th><th class="r">Farklı kalem</th><th class="r">Fark tutarı</th><th></th></tr></thead><tbody>${V.sayimlar.filter(x=>x.kres===aktifKres()).slice().reverse().map(x=>`<tr><td>${trTarihSaat(x.bit)}</td><td>${esc(x.sayan||"")}</td><td class="r">${x.satirlar.length}</td><td class="r">${x.satirlar.filter(r=>r.fark).length}</td><td class="r ${x.farkTutar<0?"neg":""}">${tl(x.farkTutar)}</td><td class="act"><button class="btn sm" data-tut="${x.id}">Tutanak</button> <button class="btn sm gold" data-ek="${x.id}">➕ Ekle</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Bu kreşte henüz sayım yapılmadı</div>'}</div>`;
     $("#syBasla").onclick=()=>{ SY.hedef={}; SY.grup=null; SY.son=null; V.aktifSayim={id:uid("s"),kres:aktifKres(),bas:new Date().toISOString(),sayan:$("#sy_sayan").value.trim(),not:$("#sy_not").value.trim(),sayilan:{},log:[]}; kaydet(); syCiz(); setTimeout(()=>SY.kam&&SY.kam.ac(),50); };
     $$("[data-tut]",gv).forEach(b=>b.onclick=()=>syTutanak(V.sayimlar.find(x=>x.id===b.dataset.tut)));
+    $$("[data-ek]",gv).forEach(b=>b.onclick=()=>syEkBaslat(b.dataset.ek));
     return;
   }
   if(s.kres!==aktifKres()){ ust.innerHTML=""; gv.innerHTML=`<div class="banner">Devam eden sayım <b>${esc(s.kres)}</b> için. Sayıma dönmek için soldan o kreşi seçin.</div>`; return; }
-  ust.innerHTML=`<button class="btn sm danger" id="syIptal">Sayımı iptal et</button><button class="btn sm gold" id="syBitir">Sayımı bitir ve işle</button>`;
+  const ekK=s.ekId&&V.sayimlar.find(x=>x.id===s.ekId);
+  ust.innerHTML=(ekK?`<span class="pill dk" style="margin-right:6px">➕ ${trTarihSaat(ekK.bit)} sayımına ekleme</span>`:"")+`<button class="btn sm danger" id="syIptal">${ekK?"Eklemeyi iptal et":"Sayımı iptal et"}</button><button class="btn sm gold" id="syBitir">${ekK?"Eklemeyi bitir ve işle":"Sayımı bitir ve işle"}</button>`;
   if(!$("#syKamW")){
     gv.innerHTML=`<div class="grid2"><div><div class="card sticky"><h3>Okut</h3><p class="hint">Bir okutma = 1. Aynı üründen bir tane daha saymak için <b>+1</b>e basın. Barkod kameranın önünde kalsa da tekrar saymaz.</p><div id="syKamW"></div><div id="sySon"></div></div></div>
       <div><div class="card"><div class="toolbar"><input type="search" id="syAra" placeholder="Listede ara…"><label class="small"><input type="checkbox" id="syFark"> Yalnızca farklılar</label><span class="small muted" id="syOzet"></span></div><div id="syTablo"></div></div></div></div>`;
@@ -2334,7 +2350,7 @@ async function syBitir(){
     [{t:"Vazgeç"},{t:"Farkları işle",c:"primary",f:()=>{ syIsle(!!($("#syBos")||{}).checked); }}]);
 }
 function syIsle(bosSifir){
-  const s=V.aktifSayim; let r=sySatirlar(); if(!bosSifir) r=r.filter(x=>x.okutuldu);
+  const s=V.aktifSayim; const onceki=syEkOnceki(s); let r=sySatirlar(); if(!bosSifir||s.ekId) r=r.filter(x=>x.okutuldu);
   const grup=uid("g"); const satirlar=[];
   for(const x of r){
     // lot bazında okutulanlar
@@ -2350,9 +2366,10 @@ function syIsle(bosSifir){
       if(lid) lotSay[lid]=(lotSay[lid]||0)+y.miktar; else genel+=y.miktar; }
     const ls=fefoSirala(lotlarOf(x.b,s.kres));
     let hedef={}; // lotId -> yeni miktar
-    ls.forEach(l=>hedef[l.id]=lotSay[l.id]||0);
+    const ustune=onceki.has(x.b); // ekleme: önceki sayımda sayılan ürünün mevcut stoğu korunur, yeni okutulan üstüne eklenir
+    ls.forEach(l=>hedef[l.id]=(ustune?kalanOf(l.id):0)+(lotSay[l.id]||0));
     // ürün geneli sayılanı: önce mevcut kalanlara (en geç tarihliden başlayarak — eskiler daha önce tükenmiş kabul edilir)
-    let kalanGenel=genel; for(const l of ls.slice().reverse()){ if(kalanGenel<=0) break; const bos=Math.max(0,kalanOf(l.id)-hedef[l.id]); const ver=Math.min(bos,kalanGenel); hedef[l.id]+=ver; kalanGenel=yuvarla(kalanGenel-ver); }
+    let kalanGenel=genel; if(!ustune) for(const l of ls.slice().reverse()){ if(kalanGenel<=0) break; const bos=Math.max(0,kalanOf(l.id)-hedef[l.id]); const ver=Math.min(bos,kalanGenel); hedef[l.id]+=ver; kalanGenel=yuvarla(kalanGenel-ver); }
     if(kalanGenel>1e-9){ // fazlalık: en son partiye ya da yeni sayım partisine
       let son=ls.filter(l=>!l.bloke).slice().sort((a,b)=>((kalanOf(b.id)>0)-(kalanOf(a.id)>0))||(b.girisTarihi||"").localeCompare(a.girisTarihi||"")||(b.skt||"").localeCompare(a.skt||""))[0];
       if(!son){ son={id:uid("l"),kres:s.kres,barkod:x.b,lot:"SAYIM",skt:"",sktTur:"STT",girisTarihi:bugun(),fiyat:x.fiyat,not:"Sayım fazlası",fotoIds:[]}; V.lotlar[son.id]=son; hedef[son.id]=0; }
@@ -2364,9 +2381,18 @@ function syIsle(bosSifir){
     const zz=syZaman(s,x.b);
     satirlar.push({barkod:x.b, ad:x.u.ad, marka:x.u.marka||"", birim:x.u.birim, sayimSaati:zz.son||"", ilkSaat:zz.ilk||"", koli:koliMetin(x.u,x.okutuldu?x.say:0), sktMin:(sktDag.filter(d=>d[1]>0&&d[0]).map(d=>d[0]).sort()[0])||"", skt:sktDag.filter(d=>d[1]>0).sort().map(d=>(d[0]?trTarih(d[0]):"tarihsiz")+": "+nf(d[1])).join(", "), sistem:x.sis, sayilan:x.okutuldu?x.say:0, fark, fiyat:x.fiyat, tutar:fiyatYok&&!tutar?null:yuvarla(tutar)});
   }
-  const kayit={id:s.id,kres:s.kres,bas:s.bas,bit:new Date().toISOString(),sayan:s.sayan,not:s.not,satirlar,farkTutar:satirlar.reduce((t,x)=>t+(x.tutar||0),0),grup};
-  V.sayimlar.push(kayit); V.aktifSayim=null; if(SY.kam) SY.kam.kapat(); kaydet(); SY.son=null;
-  $("#syBody").innerHTML=""; syCiz(); toast("Sayım işlendi"); syTutanak(kayit);
+  let kayit=s.ekId&&V.sayimlar.find(x=>x.id===s.ekId);
+  if(kayit){ // eklemeyi bitmiş sayıma birleştir
+    for(const r2 of satirlar){ const o=kayit.satirlar.find(z=>z.barkod===r2.barkod);
+      if(o && onceki.has(r2.barkod)){ const u=V.urunler[r2.barkod]||{}; o.sayilan=yuvarla((o.sayilan||0)+r2.fark); o.fark=yuvarla((o.fark||0)+r2.fark); if(r2.tutar!=null) o.tutar=yuvarla((o.tutar||0)+r2.tutar);
+        o.skt=syDagTopla(o.skt,r2.skt); o.sktMin=[o.sktMin||syTutanakSktMin(o),r2.sktMin].filter(Boolean).sort()[0]||""; o.sayimSaati=r2.sayimSaati||o.sayimSaati; if(!o.ilkSaat) o.ilkSaat=r2.ilkSaat; o.koli=koliMetin(u,o.sayilan); o.ek=true; }
+      else { if(o) kayit.satirlar=kayit.satirlar.filter(z=>z!==o); r2.ek=true; kayit.satirlar.push(r2); } }
+    kayit.farkTutar=kayit.satirlar.reduce((t,x)=>t+(x.tutar||0),0);
+    (kayit.ekler=kayit.ekler||[]).push({t:new Date().toISOString(),kalem:satirlar.length,grup});
+  } else {
+  kayit={id:s.id,kres:s.kres,bas:s.bas,bit:new Date().toISOString(),sayan:s.sayan,not:s.not,satirlar,farkTutar:satirlar.reduce((t,x)=>t+(x.tutar||0),0),grup};
+  V.sayimlar.push(kayit); } V.aktifSayim=null; if(SY.kam) SY.kam.kapat(); kaydet(); SY.son=null;
+  $("#syBody").innerHTML=""; syCiz(); toast(s.ekId?"Ekleme sayıma işlendi":"Sayım işlendi"); syTutanak(kayit);
 }
 // sayımda okutulma sırası: önce okutulan önce; okutulmayanlar en sonda (ada göre)
 function syTutanakSira(satirlar){ const z=x=>x.ilkSaat||x.sayimSaati||""; return satirlar.slice().sort((a,b)=>{ const za=z(a), zb=z(b); if(za&&zb) return za.localeCompare(zb); if(za) return -1; if(zb) return 1; return a.ad.localeCompare(b.ad,"tr"); }); }
@@ -2386,12 +2412,12 @@ function syTutanakExcel(k,satir){
   toast("Excel dosyası indirildi (İndirilenler)"); }
 function syTutanak(k){
   const satir=syTutanakSira(k.satirlar);
-  const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}</p>
+  const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}${(k.ekler||[]).length?"<br>Sonradan eklenenler: "+k.ekler.map(e=>trTarihSaat(e.t)+" ("+e.kalem+" ürün)").join(", "):""}</p>
     <table><thead><tr><th>#</th><th>Ürün</th><th>Marka</th><th>Barkod</th><th>Birim</th><th>Sistem</th><th>Sayılan</th><th>STT/TETT dağılımı</th><th>Sayım saati</th><th>Fark</th><th>Birim ₺</th><th>Fark ₺</th></tr></thead><tbody>
     ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${esc(x.skt||"")}${syTutanakSktMin(x)?" "+sktPill(syTutanakSktMin(x)):""}</td><td class="small">${x.sayimSaati?trTarihSaatSn(x.sayimSaati):""}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
     </tbody><tfoot><tr><td colspan="11" style="text-align:right"><b>Toplam fark</b></td><td style="text-align:right"><b>${tl(k.farkTutar)}</b></td></tr></tfoot></table>
     <table style="margin-top:28px;border:0"><tr><td style="border:0;width:33%">Sayımı yapan<br><br>${esc(k.sayan||"")}<br>İmza:</td><td style="border:0;width:33%">Mutfak sorumlusu<br><br><br>İmza:</td><td style="border:0">Onaylayan<br><br><br>İmza:</td></tr></table></div>`;
-  const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},{t:"Excel'e aktar",f:()=>{ syTutanakExcel(k,satir); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);
+  const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},...(V.sayimlar.some(x=>x.id===k.id)?[{t:"➕ Bu sayıma ekle",f:()=>{ setTimeout(()=>syEkBaslat(k.id),30); }}]:[]),{t:"Excel'e aktar",f:()=>{ syTutanakExcel(k,satir); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);
   $("table",b).classList.add("rt");
 }
 function yazdir(html, ad){

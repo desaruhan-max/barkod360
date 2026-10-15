@@ -2364,18 +2364,24 @@ function syIsle(bosSifir){
   V.sayimlar.push(kayit); V.aktifSayim=null; if(SY.kam) SY.kam.kapat(); kaydet(); SY.son=null;
   $("#syBody").innerHTML=""; syCiz(); toast("Sayım işlendi"); syTutanak(kayit);
 }
+// sayımda okutulma sırası: önce okutulan önce; okutulmayanlar en sonda (ada göre)
+function syTutanakSira(satirlar){ const z=x=>x.ilkSaat||x.sayimSaati||""; return satirlar.slice().sort((a,b)=>{ const za=z(a), zb=z(b); if(za&&zb) return za.localeCompare(zb); if(za) return -1; if(zb) return 1; return a.ad.localeCompare(b.ad,"tr"); }); }
+// stok Excel'i için: barkod → sıra (kreşin en son sayımı önce, içinde okutulma sırası)
+function sayimSirasi(kres){ const m=new Map(); let n=0; const ss=V.sayimlar.filter(x=>!kres||x.kres===kres).slice().sort((a,b)=>(b.bit||"").localeCompare(a.bit||""));
+  for(const k of ss) for(const x of syTutanakSira(k.satirlar||[])){ if(!(x.ilkSaat||x.sayimSaati)) continue; if(!m.has(x.barkod)) m.set(x.barkod,n++); }
+  return m; }
 function syTutanakSktMin(x){ if(x.sktMin) return x.sktMin; const ts=[...String(x.skt||"").matchAll(/(\d{2})\.(\d{2})\.(\d{4})/g)].map(m=>m[3]+"-"+m[2]+"-"+m[1]).sort(); return ts[0]||""; }
 const SY_RENK_HTML={[XLSX_STIL.kirmizi]:"#f8b4b0",[XLSX_STIL.turuncu]:"#ffc98f",[XLSX_STIL.sari]:"#fff09a",[XLSX_STIL.yesil]:"#cdebd6"};
 function syTutanakExcel(k,satir){
-  const H=["Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","STT/TETT dağılımı","En yakın STT/TETT","Kalan gün","Durum","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
+  const H=["Sıra","Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","STT/TETT dağılımı","En yakın STT/TETT","Kalan gün","Durum","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
   const rows=[[{v:"STOK SAYIM TUTANAĞI · "+k.kres+" · "+trTarihSaat(k.bit)+(k.sayan?" · Sayan: "+k.sayan:""),s:XLSX_STIL.ust}],xlsxRenkAciklama(),H.map(v=>({v,s:XLSX_STIL.baslik}))];
-  satir.forEach(x=>{ const t=syTutanakSktMin(x); const r=xlsxSktRenk(t); const ft=x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null);
-    rows.push(xlsxSatirBoya([x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",x.skt||"",t?{v:tarihNesne(t),s:XLSX_STIL.tarih}:"",t?gunFark(t):"",t?r.ad:"Tarih yok",x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r)); });
+  satir.forEach((x,i)=>{ const t=syTutanakSktMin(x); const r=xlsxSktRenk(t); const ft=x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null);
+    rows.push(xlsxSatirBoya([i+1,x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",x.skt||"",t?{v:tarihNesne(t),s:XLSX_STIL.tarih}:"",t?gunFark(t):"",t?r.ad:"Tarih yok",x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r)); });
   rows.push([{v:"Toplam fark: "+tl(k.farkTutar),s:XLSX_STIL.kalin}]);
-  indir("sayim_"+KISA[k.kres]+"_"+k.bit.slice(0,10)+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[34,16,16,8,9,9,16,30,14,10,16,19,9,10,11],satirlar:rows,donuk:3}]));
+  indir("sayim_"+KISA[k.kres]+"_"+k.bit.slice(0,10)+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,34,16,16,8,9,9,16,30,14,10,16,19,9,10,11],satirlar:rows,donuk:3}]));
   toast("Excel dosyası indirildi (İndirilenler)"); }
 function syTutanak(k){
-  const satir=k.satirlar.slice().sort((a,b)=>a.ad.localeCompare(b.ad,"tr"));
+  const satir=syTutanakSira(k.satirlar);
   const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}</p>
     <table><thead><tr><th>#</th><th>Ürün</th><th>Marka</th><th>Barkod</th><th>Birim</th><th>Sistem</th><th>Sayılan</th><th>STT/TETT dağılımı</th><th>Sayım saati</th><th>Fark</th><th>Birim ₺</th><th>Fark ₺</th></tr></thead><tbody>
     ${satir.map((x,i)=>`<tr style="background:${SY_RENK_HTML[xlsxSktRenk(syTutanakSktMin(x)).s]||"transparent"}"><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${esc(x.skt||"")}</td><td class="small">${x.sayimSaati?trTarihSaatSn(x.sayimSaati):""}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
@@ -2413,37 +2419,28 @@ SAYFA.stok = {
       </tbody><tfoot><tr><td colspan="7">Toplam ${r.length} ürün</td><td class="r">${tl(top)}</td><td></td></tr></tfoot></table></div>`;
     $$("#stTablo tr[data-b]").forEach(t=>t.onclick=()=>urunDetay(t.dataset.b, kap==="tum"?null:aktifKres()));
   },
-  csv(){ // Excel: gıda gruplarına göre kategorili stok + partiler (STT/TETT) + grup özeti
+  csv(){ // Excel: kategori yok; ürünler sayımda okutulduğu sıraya göre (en son sayım önce), hiç sayılmayanlar en sonda
     const tum=$("#stKapsam").value==="tum"; const kres=tum?null:aktifKres(); const r=this.veri();
-    if(gruplariDuzenle()){ kaydet(); }
-    const grupOf=u=>u.grup&&GRUPLAR.includes(u.grup)?u.grup:(grupTahmin(u)||"Muhtelif Gıda");
-    const sira=g=>{ const i=GRUPLAR.indexOf(g); return g==="Muhtelif Gıda"?98:g==="Temizlik / Diğer"?99:(i<0?97:i); };
-    const gruplar={}; r.forEach(x=>{ const g=grupOf(x.u); (gruplar[g]=gruplar[g]||[]).push(x); });
-    const gSira=Object.keys(gruplar).sort((a,b)=>sira(a)-sira(b));
-    const durum=skt=>{ const r=xlsxSktRenk(skt); return [r.ad,r.s,r]; };
+    const sira=sayimSirasi(kres);
+    const sr=b=>sira.has(b)?sira.get(b):1e9;
+    const xs=r.slice().sort((a,b)=>sr(a.b)-sr(b.b)||a.u.ad.localeCompare(b.u.ad,"tr"));
+    const durum=skt=>{ const q=xlsxSktRenk(skt); return [q.ad,q.s,q]; };
     const baslik=(t)=>[{v:t,s:XLSX_STIL.ust}];
     const kapsamAd=tum?"Tüm kreşler":aktifKres();
-    // 1. sayfa: kategorili stok
-    const H1=["Ürün","Marka","Net miktar","Barkod","Miktar","Birim","Koli","Parti","En yakın STT/TETT","Kalan gün","Durum"];
+    // 1. sayfa: stok (sayım sırası)
+    const H1=["Sıra","Ürün","Marka","Net miktar","Barkod","Miktar","Birim","Koli","Parti","En yakın STT/TETT","Kalan gün","Durum"];
     const s1=[baslik("BARKOD360 · Stok Durumu · "+kapsamAd+" · "+trTarih(bugun())),xlsxRenkAciklama(),H1.map(v=>({v,s:XLSX_STIL.baslik}))];
-    gSira.forEach(g=>{ const xs=gruplar[g].sort((a,b)=>a.u.ad.localeCompare(b.u.ad,"tr"));
-      s1.push([{v:g+"  ("+xs.length+" çeşit)",s:XLSX_STIL.kategori},...Array(10).fill({v:"",s:XLSX_STIL.kategori})]);
-      xs.forEach(x=>{ const [dt,ds,rr]=durum(x.skt); s1.push(xlsxSatirBoya([x.u.ad,x.u.marka||"",x.u.net||"",x.b,{v:yuvarla(x.mik),s:XLSX_STIL.sayi},x.u.birim||"",koliMetin(x.u,x.mik)||"",x.lot,x.skt?{v:tarihNesne(x.skt),s:XLSX_STIL.tarih}:"",x.skt?gunFark(x.skt):"",dt],rr)); });
-      s1.push([]); });
-    s1.push([{v:"Toplam "+r.length+" ürün çeşidi",s:XLSX_STIL.kalin}]);
-    // 2. sayfa: partiler (her STT/TETT ayrı satır)
-    const H2=["Gıda grubu","Ürün","Marka",...(tum?["Kreş"]:[]),"Parti / Lot","Üretim tarihi","STT/TETT türü","STT/TETT","Kalan gün","Miktar","Birim","Durum"];
+    xs.forEach((x,i)=>{ const [dt,ds,rr]=durum(x.skt); s1.push(xlsxSatirBoya([i+1,x.u.ad,x.u.marka||"",x.u.net||"",x.b,{v:yuvarla(x.mik),s:XLSX_STIL.sayi},x.u.birim||"",koliMetin(x.u,x.mik)||"",x.lot==="SAYIM"?"":(x.lot||""),x.skt?{v:tarihNesne(x.skt),s:XLSX_STIL.tarih}:"",x.skt?gunFark(x.skt):"",dt],rr)); });
+    s1.push([]); s1.push([{v:"Toplam "+r.length+" ürün çeşidi",s:XLSX_STIL.kalin}]);
+    // 2. sayfa: partiler (her STT/TETT ayrı satır), aynı sıra
+    const H2=["Ürün","Marka",...(tum?["Kreş"]:[]),"Parti / Lot","Üretim tarihi","STT/TETT türü","STT/TETT","Kalan gün","Miktar","Birim","Durum"];
     const s2=[baslik("BARKOD360 · Partiler ve son tüketim tarihleri · "+kapsamAd+" · "+trTarih(bugun())),xlsxRenkAciklama(),H2.map(v=>({v,s:XLSX_STIL.baslik}))];
     const ls=Object.values(V.lotlar).filter(l=>(!kres||l.kres===kres)&&!l.red&&kalanOf(l.id)>0).map(l=>({l,u:V.urunler[l.barkod]||{ad:l.barkod}}));
-    ls.sort((a,b)=>sira(grupOf(a.u))-sira(grupOf(b.u))||a.u.ad.localeCompare(b.u.ad,"tr")||(a.l.skt||"9").localeCompare(b.l.skt||"9"));
-    ls.forEach(({l,u})=>{ const [dt,ds,rr]=durum(l.skt); s2.push(xlsxSatirBoya([grupOf(u),u.ad,u.marka||"",...(tum?[KISA[l.kres]||l.kres]:[]),l.lot||"",l.ut?{v:tarihNesne(l.ut),s:XLSX_STIL.tarih}:"",l.sktTur||"",l.skt?{v:tarihNesne(l.skt),s:XLSX_STIL.tarih}:"",l.skt?gunFark(l.skt):"",yuvarla(kalanOf(l.id)),u.birim||"",dt],rr)); });
-    // 3. sayfa: grup özeti
-    const s3=[baslik("BARKOD360 · Gıda grubu özeti · "+kapsamAd+" · "+trTarih(bugun())),[],["Gıda grubu","Ürün çeşidi","Tarihi geçmiş parti","7 gün içinde dolacak","30 gün içinde dolacak"].map(v=>({v,s:XLSX_STIL.baslik}))];
-    gSira.forEach(g=>{ const bk=new Set(gruplar[g].map(x=>x.b)); const gl=ls.filter(o=>bk.has(o.l.barkod)); s3.push([g,gruplar[g].length,gl.filter(o=>o.l.skt&&gunFark(o.l.skt)<0).length,gl.filter(o=>o.l.skt&&gunFark(o.l.skt)>=0&&gunFark(o.l.skt)<=7).length,gl.filter(o=>o.l.skt&&gunFark(o.l.skt)>7&&gunFark(o.l.skt)<=30).length]); });
+    ls.sort((a,b)=>sr(a.l.barkod)-sr(b.l.barkod)||a.u.ad.localeCompare(b.u.ad,"tr")||(a.l.skt||"9").localeCompare(b.l.skt||"9"));
+    ls.forEach(({l,u})=>{ const [dt,ds,rr]=durum(l.skt); s2.push(xlsxSatirBoya([u.ad,u.marka||"",...(tum?[KISA[l.kres]||l.kres]:[]),l.lot==="SAYIM"?"":(l.lot||""),l.ut?{v:tarihNesne(l.ut),s:XLSX_STIL.tarih}:"",l.sktTur||"",l.skt?{v:tarihNesne(l.skt),s:XLSX_STIL.tarih}:"",l.skt?gunFark(l.skt):"",yuvarla(kalanOf(l.id)),u.birim||"",dt],rr)); });
     const blob=xlsxOlustur([
-      {ad:"Stok (gruplu)",sutunlar:[34,16,12,16,9,8,18,7,14,10,16],satirlar:s1,donuk:3,birlesik:["A1:K1"]},
-      {ad:"Partiler (STT-TETT)",sutunlar:[24,30,14,...(tum?[10]:[]),16,13,12,13,10,9,8,16],satirlar:s2,donuk:3},
-      {ad:"Grup özeti",sutunlar:[28,13,18,20,20],satirlar:s3,donuk:3}]);
+      {ad:"Stok",sutunlar:[6,34,16,12,16,9,8,18,10,14,10,18],satirlar:s1,donuk:3,birlesik:["A1:L1"]},
+      {ad:"Partiler (STT-TETT)",sutunlar:[30,14,...(tum?[10]:[]),16,13,12,13,10,9,8,18],satirlar:s2,donuk:3}]);
     indir("BARKOD360_stok_"+(tum?"TUM":KISA[aktifKres()])+"_"+bugun()+".xlsx",blob);
     toast("Excel dosyası indirildi (İndirilenler)"); }
 };

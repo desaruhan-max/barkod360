@@ -1317,7 +1317,7 @@ class Kamera{
     const o=this.o;
     this.kap.innerHTML=`
       <div class="canli"><div class="cam"><video playsinline muted></video><div class="hedef"></div><div class="bos">Kamera kapalı<br><small>“Kamerayı aç”a basın, sonra barkodu çerçeveye tutun</small></div><div class="st" style="display:none"></div></div>
-      <div class="cam-bar"><button class="btn primary kAc" style="flex:1">📷 Kamerayı aç</button><button class="btn gold kElle" title="Kamera okumuyorsa barkodun altındaki rakamları yazın">⌨ Barkod gir</button><button class="btn sm kKapat">Kapat</button><select class="kSec" title="Kamera"><option value="">Kamera seçin…</option></select></div>
+      <div class="cam-bar"><button class="btn primary kAc" style="flex:1">📷 Kamerayı aç</button><button class="btn gold kElle" title="Kamera okumuyorsa barkodun altındaki rakamları yazın">⌨ Barkod gir</button>${o.onBarkodsuz?'<button class="btn gold kBarkodsuz" title="Kavanoz, kap gibi barkodu ve etiketi olmayan ürün">🫙 Barkodsuz ürün</button>':""}<button class="btn sm kKapat">Kapat</button><select class="kSec" title="Kamera"><option value="">Kamera seçin…</option></select></div>
       ${o.onFoto?'<div class="cam-bar"><button class="btn gold kFoto" style="flex:1">🗓 Tarihi oku <small>(ambalajın tarih yüzünü tutup basın)</small></button></div>':""}</div>
       <label class="btn big fotoCek"><span>${o.fotoMetin||"📸 Fotoğraf çek"}</span><small>${o.fotoAlt||"fotoğraftaki tüm barkodlar okunur"}</small><input type="file" class="kCek" accept="image/*" capture="environment" hidden></label>
       <div class="cam-bar"><label class="btn sm">🖼 Galeriden seç<input type="file" class="kDosya" accept="image/*" hidden></label></div>
@@ -1327,6 +1327,7 @@ class Kamera{
     $(".kKapat",this.kap).onclick=()=>this.kapat();
     $(".kSec",this.kap).onchange=e=>{ try{localStorage.setItem("b360kamera",e.target.value);}catch(_){} if(this.akis) this.ac(); };
     const fb=$(".kFoto",this.kap); if(fb) fb.onclick=()=>this.fotoCek();
+    const kbs=$(".kBarkodsuz",this.kap); if(kbs) kbs.onclick=()=>this.o.onBarkodsuz();
     $(".kElle",this.kap).onclick=()=>{ const b=dlg("Barkodu elle girin",`<p>Kamera okumuyorsa barkodun <b>altındaki rakamları</b> yazın.</p><input id="kbElle" inputmode="numeric" autocomplete="off" placeholder="8690000000000" style="font-size:24px;width:100%;letter-spacing:2px"><p class="small muted" id="kbElleDur"></p>`,
         [{t:"Vazgeç"},{t:"Tamam",c:"primary",f:()=>{ const v=$("#kbElle").value.replace(/\D/g,""); if(!/^\d{8}$|^\d{12,14}$/.test(v)){ $("#kbElleDur").textContent="Barkod 8, 12, 13 ya da 14 rakam olmalı ("+v.length+" yazdınız)."; return false; }
           if(kontrolHanesi(v.slice(0,-1))!==+v.slice(-1)){ $("#kbElleDur").innerHTML='<span class="neg">Son rakam tutmuyor; bir rakam yanlış yazılmış olabilir. Ambalajdan tekrar kontrol edin.</span>'; return false; }
@@ -2038,6 +2039,24 @@ function syKoliOlarakTani(koliKod){
       const eski=V.urunler[koliKod]; if(eski&&eski.tanimsiz&&!Object.values(V.lotlar).some(l=>l.barkod===koliKod)) delete V.urunler[koliKod];
       SY.son={barkod:hedef.barkod,lotId:SY.hedef&&SY.hedef[hedef.barkod]||null}; kaydet(); urunListesiGuncelle(); syCiz(); toast("Koli barkodu "+hedef.ad+" ürününe bağlandı"); }}]);
 }
+// Barkodu ve etiketi olmayan ürün (kavanoz, kap, elle yazılmış tarih): adıyla tanıtılır, programın iç kodu (20…) verilir.
+// Bir kez tanıtılan barkodsuz ürün sonraki sayımlarda listeden seçilir.
+function syBarkodsuz(){
+  const mevcut=Object.values(V.urunler).filter(u=>u.barkodsuz||/^20\d{11}$/.test(u.barkod)).sort((a,b)=>a.ad.localeCompare(b.ad,"tr"));
+  const b=dlg("🫙 Barkodsuz ürün",`<p class="hint" style="margin-top:0">Kavanoza, kaba konmuş; barkodu ve etiketi olmayan ürünler için.</p>
+    ${mevcut.length?`<div class="small" style="font-weight:700">Daha önce tanıtılanlar:</div><div class="skt-chips" style="margin-bottom:10px">${mevcut.map(u=>`<button type="button" data-bs="${esc(u.barkod)}">${esc(u.ad)}</button>`).join("")}</div><div class="small" style="font-weight:700">Ya da yeni ürün:</div>`:""}
+    <label class="f">Ürünün adı<input id="bsAd" placeholder="Örn. Kuru üzüm (kavanoz)" style="font-size:17px"></label>
+    <label class="f">Birim<select id="bsBirim" style="font-size:16px">${BIRIMLER.map(x=>`<option${x==="kg"?" selected":""}>${x}</option>`).join("")}</select></label>
+    <p class="small muted">Sonraki ekranda resmini ve elle yazılmış tarihin resmini çekersiniz; tarihi Claude okur ya da siz yazarsınız.</p>`,
+    [{t:"Vazgeç"},{t:"Devam",c:"primary",f:()=>{ const ad=$("#bsAd").value.trim(); if(!ad){ toast("Ürünün adını yazın ya da listeden seçin",1); return false; }
+      const ayni=mevcut.find(u=>u.ad.toLocaleLowerCase("tr")===ad.toLocaleLowerCase("tr"));
+      let kod; if(ayni) kod=ayni.barkod; else { do{ const g="20"+String(Math.floor(Math.random()*1e10)).padStart(10,"0"); kod=g+kontrolHanesi(g); }while(V.urunler[kod]);
+        V.urunler[kod]={barkod:kod,ad,barkodsuz:true,birim:$("#bsBirim").value,grup:"Muhtelif Gıda",saklama:"oda",alerjen:[],uretici:"(barkodsuz / açık ürün)",olusturma:new Date().toISOString(),son:{}};
+        const g=grupTahmin(V.urunler[kod]); if(g){ V.urunler[kod].grup=g; V.urunler[kod].grupOto=true; } kaydet(); urunListesiGuncelle(); }
+      setTimeout(()=>syBarkod({gtin:kod,ham:kod,ai:{},format:"İç kod",foto:true}),30); }}]);
+  $$("[data-bs]",b).forEach(x=>x.onclick=()=>{ dlgKapat(); const kod=x.dataset.bs; setTimeout(()=>syBarkod({gtin:kod,ham:kod,ai:{},format:"İç kod",foto:true}),30); });
+  setTimeout(()=>{ const i=$("#bsAd",b); i&&!mevcut.length&&i.focus(); },60);
+}
 function syYeniUrun(a){ // sayımı durdurmadan say: kart adsız açılır, internet varsa adı ve görseli kendiliğinden gelir
   const kod=a.tartili?a.tartili.kod:a.gtin;
   V.urunler[kod]={barkod:kod, ad:"❓ Adı girilmemiş ürün · "+kod, tanimsiz:true, marka:"", grup:GRUPLAR[0], birim:a.tartili?"kg":"adet", saklama:"oda", alerjen:[], olusturma:new Date().toISOString(), son:{}};
@@ -2079,7 +2098,7 @@ function syCiz(){
   if(!$("#syKamW")){
     gv.innerHTML=`<div class="grid2"><div><div class="card sticky"><h3>Okut</h3><p class="hint">Bir okutma = 1. Aynı üründen bir tane daha saymak için <b>+1</b>e basın. Barkod kameranın önünde kalsa da tekrar saymaz.</p><div id="syKamW"></div><div id="sySon"></div></div></div>
       <div><div class="card"><div class="toolbar"><input type="search" id="syAra" placeholder="Listede ara…"><label class="small"><input type="checkbox" id="syFark"> Yalnızca farklılar</label><span class="small muted" id="syOzet"></span></div><div id="syTablo"></div></div></div></div>`;
-    SY.kam=new Kamera($("#syKamW"),{onBarkod:syBarkod,tekrarMs:3000,coklu:true});
+    SY.kam=new Kamera($("#syKamW"),{onBarkod:syBarkod,onBarkodsuz:syBarkodsuz,tekrarMs:3000,coklu:true});
     $("#syAra").oninput=e=>{ SY.ara=e.target.value; syTablo(); }; $("#syFark").onchange=e=>{ SY.sadeceFark=e.target.checked; syTablo(); };
   }
   $("#syIptal").onclick=async()=>{ if(await onayla("Sayım iptal edilecek, okutulanlar silinecek. Stoğa hiçbir şey işlenmez.","Sayımı iptal et")){ V.aktifSayim=null; kaydet(); if(SY.kam) SY.kam.kapat(); $("#syBody").innerHTML=""; syCiz(); } };
@@ -2118,8 +2137,8 @@ function sySonCiz(){
   const skt=syLotSkt(lotId); const sktFoto=(s.fotolar||{})[barkod+"|"+skt];
   const adim=(no,ok,baslik,ic)=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)"><div style="flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:${ok?"#2e8f6f":"#9aa5a0"}">${ok?"✓":no}</div><div style="flex:1;min-width:0"><div style="font-weight:800">${baslik}</div>${ic}</div></div>`;
   e.innerHTML=`<div class="sonuc">
-    ${adim(1,!u.tanimsiz,u.tanimsiz?"Ürünün adını yazın":"Barkod okundu",u.tanimsiz?`<div class="small" style="color:#b45309;font-weight:700">Bu barkod tanınmadı. Ad olmazsa sonradan hangi ürün olduğu bilinmez.</div><input id="syAdHizli" placeholder="Örn. Oba tel şehriye 5 kg" style="width:100%;font-size:17px;margin-top:4px"><div class="small muted">Yazıp klavyede Tamam'a basın.</div><button class="btn sm gold" id="syKoliMi" style="margin-top:6px">📦 Bu bir koli barkodu (ürün kayıtlı)</button>`:`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
-    ${adim(2,!!u.gorselId&&!!u.uretici,"Etiketin resmi (arka yüz)",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId&&u.uretici?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId&&u.uretici?"Yeniden çek":"Etiketin resmini çek"}</button></div><div class="small muted" id="syAdDur">${u.uretici?"":"Ürün adı, içindekiler ve üreticinin yazdığı yüzü çekin. Claude bütün bilgileri kendisi doldurur; siz bir şey yazmazsınız."}</div>`)}
+    ${adim(1,!u.tanimsiz,u.tanimsiz?"Ürünün adını yazın":(u.barkodsuz?"🫙 Barkodsuz ürün":"Barkod okundu"),u.tanimsiz?`<div class="small" style="color:#b45309;font-weight:700">Bu barkod tanınmadı. Ad olmazsa sonradan hangi ürün olduğu bilinmez.</div><input id="syAdHizli" placeholder="Örn. Oba tel şehriye 5 kg" style="width:100%;font-size:17px;margin-top:4px"><div class="small muted">Yazıp klavyede Tamam'a basın.</div><button class="btn sm gold" id="syKoliMi" style="margin-top:6px">📦 Bu bir koli barkodu (ürün kayıtlı)</button>`:`<div style="font-size:17px;font-weight:800;color:var(--deep)">${esc(u.ad)}</div><div class="small">${[u.marka,u.net].filter(Boolean).map(esc).join(" · ")}</div>`)}
+    ${adim(2,!!u.gorselId&&!!u.uretici,u.barkodsuz?"Ürünün / kabın resmi":"Etiketin resmi (arka yüz)",`<div style="display:flex;gap:10px;align-items:center;margin-top:4px"><img data-g="${esc(barkod)}" alt="" style="display:none;width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;visibility:hidden"><button class="btn ${u.gorselId&&u.uretici?"sm":"primary"}" id="syGorsel">📷 ${u.gorselId&&u.uretici?"Yeniden çek":"Etiketin resmini çek"}</button></div><div class="small muted" id="syAdDur">${u.uretici?"":"Ürün adı, içindekiler ve üreticinin yazdığı yüzü çekin. Claude bütün bilgileri kendisi doldurur; siz bir şey yazmazsınız."}</div>`)}
     ${adim(3,!!skt,"STT / TETT",`<div style="margin-top:4px"><button class="btn ${skt?"sm":"gold"}" id="sySktFoto">📸 ${skt?"Tarihin resmini yeniden çek":"Tarihin resmini çek"}</button>${sktFoto?' <span class="small">resim kaydedildi ✓</span>':""}</div>
       ${(SY.fotolar||[]).filter(g=>g.barkod===barkod).length?`<div class="small" style="margin-top:6px;font-weight:700">Tarih resimleri (her biri 1 paket):</div><div class="skt-chips">${(SY.fotolar||[]).filter(g=>g.barkod===barkod).map(g=>`<button type="button" data-fno="${g.no}">${g.no}) ${esc(g.durum)}</button>`).join("")}</div><div class="small muted">Yanlış olana dokunup düzeltin. Resimleri art arda çekebilirsiniz.</div>`:""}
       <div class="small muted" id="sySktDur" style="margin-top:4px">${skt?"Seçili tarih: <b>"+trTarih(skt)+"</b>":"Resmi çekince tarih okunur. Okunamazsa aşağıdan seçin ya da yazın."}</div>

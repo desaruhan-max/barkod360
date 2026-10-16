@@ -430,7 +430,7 @@ img[data-g],.dlg img{cursor:zoom-in}
 <!-- ============ STOK ============ -->
 <section class="tab" id="tab-stok">
   <div class="sec-h"><h2>Stok Durumu</h2><span class="kr" data-kres></span>
-    <div class="sp"><button class="btn sm" id="stCsv">Excel'e aktar</button><button class="btn sm" id="stYaz">Yazdır</button></div></div>
+    <div class="sp"><button class="btn sm" id="stCsvR">Excel (resimli)</button><button class="btn sm" id="stCsv">Excel (resimsiz)</button><button class="btn sm" id="stYaz">Yazdır</button></div></div>
   <div class="toolbar">
     <input type="search" id="stAra" placeholder="Ürün, marka, barkod ara…">
     <select id="stGrup"></select>
@@ -2512,14 +2512,14 @@ function sayimSirasi(kres){ const m=new Map(); let n=0; const ss=V.sayimlar.filt
   return m; }
 function syTutanakSktMin(x){ if(x.sktMin) return x.sktMin; const ts=[...String(x.skt||"").matchAll(/(\d{2})\.(\d{2})\.(\d{4})/g)].map(m=>m[3]+"-"+m[2]+"-"+m[1]).sort(); return ts[0]||""; }
 const SY_RENK_HTML={[XLSX_STIL.kirmizi]:"#f8b4b0",[XLSX_STIL.turuncu]:"#ffc98f",[XLSX_STIL.sari]:"#fff09a",[XLSX_STIL.yesil]:"#cdebd6"};
-async function syTutanakExcel(k,satir){
-  const H=["Sıra","Resim","Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","Alerjenler","STT/TETT dağılımı","En yakın STT/TETT","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
+async function syTutanakExcel(k,satir,resimli){
+  const H=["Sıra",...(resimli?["Resim"]:[]),"Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","Alerjenler","STT/TETT dağılımı","En yakın STT/TETT","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
   const rows=[[{v:"STOK SAYIM TUTANAĞI · "+k.kres+" · "+trTarihSaat(k.bit)+(k.sayan?" · Sayan: "+k.sayan:""),s:XLSX_STIL.ust}],xlsxRenkAciklama(),H.map(v=>({v,s:XLSX_STIL.baslik}))];
   satir.forEach((x,i)=>{ const t=syTutanakSktMin(x); const r=xlsxSktRenk(t); const ft=x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null);
-    rows.push(xlsxSatirBoya([i+1,"",x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",alerjenHucre(x.barkod),x.skt||"",xlsxSktHucre(t),x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r,[])); });
-  toast("Resimler hazırlanıyor…"); const resimler=[]; for(let i=0;i<satir.length;i++){ const v=await xlsxResim(satir[i].barkod); if(v) resimler.push({r:3+i,c:1,veri:v}); }
+    rows.push(xlsxSatirBoya([i+1,...(resimli?[""]:[]),x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",alerjenHucre(x.barkod),x.skt||"",xlsxSktHucre(t),x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r,[])); });
+  const resimler=[]; if(resimli){ toast("Resimler hazırlanıyor…"); } for(let i=0;resimli&&i<satir.length;i++){ const v=await xlsxResim(satir[i].barkod); if(v) resimler.push({r:3+i,c:1,veri:v}); }
   rows.push([{v:"Toplam fark: "+tl(k.farkTutar),s:XLSX_STIL.kalin}]);
-  indir("stok sayım "+trTarih((d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()))(new Date(k.bit)))+" "+k.kres+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,9,34,16,16,8,9,9,16,26,30,28,19,9,10,11],satirlar:rows,donuk:3,resimler}]));
+  indir("stok sayım "+trTarih((d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()))(new Date(k.bit)))+" "+k.kres+(resimli?" resimli":"")+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,...(resimli?[9]:[]),34,16,16,8,9,9,16,26,30,28,19,9,10,11],satirlar:rows,donuk:3,resimler}]));
   toast("Excel dosyası indirildi (İndirilenler)"); }
 function syTutanak(k){
   const satir=syTutanakSira(k.satirlar);
@@ -2528,7 +2528,7 @@ function syTutanak(k){
     ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${alerjenMetin(x.barkod)?`<span class="pill no">Alerjenler: ${esc(alerjenMetin(x.barkod))}</span>`:""}</td><td class="small">${esc(x.skt||"")}${syTutanakSktMin(x)?" "+sktPill(syTutanakSktMin(x)):""}</td><td class="small">${x.sayimSaati?trTarihSaatSn(x.sayimSaati):""}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
     </tbody><tfoot><tr><td colspan="12" style="text-align:right"><b>Toplam fark</b></td><td style="text-align:right"><b>${tl(k.farkTutar)}</b></td></tr></tfoot></table>
     <table style="margin-top:28px;border:0"><tr><td style="border:0;width:33%">Sayımı yapan<br><br>${esc(k.sayan||"")}<br>İmza:</td><td style="border:0;width:33%">Mutfak sorumlusu<br><br><br>İmza:</td><td style="border:0">Onaylayan<br><br><br>İmza:</td></tr></table></div>`;
-  const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},...(V.sayimlar.some(x=>x.id===k.id)?[{t:"➕ Bu sayıma ekle",f:()=>{ setTimeout(()=>syEkBaslat(k.id),30); }}]:[]),{t:"Excel'e aktar",f:()=>{ syTutanakExcel(k,satir); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);
+  const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},...(V.sayimlar.some(x=>x.id===k.id)?[{t:"➕ Bu sayıma ekle",f:()=>{ setTimeout(()=>syEkBaslat(k.id),30); }}]:[]),{t:"Excel (resimli)",f:()=>{ syTutanakExcel(k,satir,true); return false; }},{t:"Excel (resimsiz)",f:()=>{ syTutanakExcel(k,satir,false); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);
   $("table",b).classList.add("rt");
 }
 function yazdir(html, ad){
@@ -2547,7 +2547,7 @@ function stokSatirlari(kapsam){
 }
 SAYFA.stok = {
   ilk(){ selDoldur($("#stGrup"),GRUPLAR,"","Tüm gruplar"); ["stAra","stGrup","stKapsam","stSifir"].forEach(i=>$("#"+i).addEventListener("input",()=>this.goster()));
-    $("#stCsv").onclick=()=>this.csv(); $("#stYaz").onclick=()=>yazdir('<div class="rapor"><h2>Stok Durumu · '+esc($("#stKapsam").value==="tum"?"Tüm kreşler":aktifKres())+" · "+trTarih(bugun())+"</h2>"+$("#stTablo").innerHTML+"</div>"); },
+    $("#stCsv").onclick=()=>this.csv(false); $("#stCsvR").onclick=()=>this.csv(true); $("#stYaz").onclick=()=>yazdir('<div class="rapor"><h2>Stok Durumu · '+esc($("#stKapsam").value==="tum"?"Tüm kreşler":aktifKres())+" · "+trTarih(bugun())+"</h2>"+$("#stTablo").innerHTML+"</div>"); },
   veri(){ const kap=$("#stKapsam").value, m=stokSatirlari(kap), ara=katla($("#stAra").value), g=$("#stGrup").value, sifir=$("#stSifir").checked;
     let r=Object.values(V.urunler).map(u=>Object.assign({u},m[u.barkod]||{b:u.barkod,mik:0,deger:0,lot:0,skt:null,bloke:0}));
     if(!sifir) r=r.filter(x=>x.mik>0); if(g) r=r.filter(x=>x.u.grup===g); if(ara) r=r.filter(x=>katla(x.u.ad+" "+(x.u.marka||"")+" "+x.b+" "+(x.u.uretici||"")).includes(ara));
@@ -2563,7 +2563,7 @@ SAYFA.stok = {
     $$("#stTablo tr[data-b]").forEach(t=>t.onclick=()=>urunDetay(t.dataset.b, kap==="tum"?null:aktifKres()));
     gorselYukle($("#stTablo")); resimTamamla(r.map(x=>x.b),()=>{ if(AKTIF_SEKME==="stok") gorselYukle($("#stTablo")); });
   },
-  async csv(){ // Excel: kategori yok; ürünler sayımda okutulduğu sıraya göre (en son sayım önce), hiç sayılmayanlar en sonda
+  async csv(resimli){ // Excel: kategori yok; ürünler sayımda okutulduğu sıraya göre (en son sayım önce), hiç sayılmayanlar en sonda
     const tum=$("#stKapsam").value==="tum"; const kres=tum?null:aktifKres(); const r=this.veri();
     const sira=sayimSirasi(kres);
     const sr=b=>sira.has(b)?sira.get(b):1e9;
@@ -2572,9 +2572,9 @@ SAYFA.stok = {
     const baslik=(t)=>[{v:t,s:XLSX_STIL.ust}];
     const kapsamAd=tum?"Tüm kreşler":aktifKres();
     // 1. sayfa: stok (sayım sırası)
-    const H1=["Sıra","Resim","Ürün","Marka","Net miktar","Barkod","Miktar","Birim","Koli","Parti","En yakın STT/TETT","Alerjenler"];
+    const H1=["Sıra",...(resimli?["Resim"]:[]),"Ürün","Marka","Net miktar","Barkod","Miktar","Birim","Koli","Parti","En yakın STT/TETT","Alerjenler"];
     const s1=[baslik("BARKOD360 · Stok Durumu · "+kapsamAd+" · "+trTarih(bugun())),xlsxRenkAciklama(),H1.map(v=>({v,s:XLSX_STIL.baslik}))];
-    xs.forEach((x,i)=>{ const [dt,ds,rr]=durum(x.skt); s1.push(xlsxSatirBoya([i+1,"",x.u.ad,x.u.marka||"",x.u.net||"",x.b,{v:yuvarla(x.mik),s:XLSX_STIL.sayi},x.u.birim||"",koliMetin(x.u,x.mik)||"",x.lot==="SAYIM"?"":(x.lot||""),xlsxSktHucre(x.skt),alerjenHucre(x.b)],rr,[])); });
+    xs.forEach((x,i)=>{ const [dt,ds,rr]=durum(x.skt); s1.push(xlsxSatirBoya([i+1,...(resimli?[""]:[]),x.u.ad,x.u.marka||"",x.u.net||"",x.b,{v:yuvarla(x.mik),s:XLSX_STIL.sayi},x.u.birim||"",koliMetin(x.u,x.mik)||"",x.lot==="SAYIM"?"":(x.lot||""),xlsxSktHucre(x.skt),alerjenHucre(x.b)],rr,[])); });
     s1.push([]); s1.push([{v:"Toplam "+r.length+" ürün çeşidi",s:XLSX_STIL.kalin}]);
     // 2. sayfa: partiler (her STT/TETT ayrı satır), aynı sıra
     const H2=["Ürün","Marka",...(tum?["Kreş"]:[]),"Parti / Lot","Üretim tarihi","STT/TETT türü","STT/TETT","Miktar","Birim"];
@@ -2582,11 +2582,11 @@ SAYFA.stok = {
     const ls=Object.values(V.lotlar).filter(l=>(!kres||l.kres===kres)&&!l.red&&kalanOf(l.id)>0).map(l=>({l,u:V.urunler[l.barkod]||{ad:l.barkod}}));
     ls.sort((a,b)=>sr(a.l.barkod)-sr(b.l.barkod)||a.u.ad.localeCompare(b.u.ad,"tr")||(a.l.skt||"9").localeCompare(b.l.skt||"9"));
     ls.forEach(({l,u})=>{ const [dt,ds,rr]=durum(l.skt); s2.push(xlsxSatirBoya([u.ad,u.marka||"",...(tum?[KISA[l.kres]||l.kres]:[]),l.lot==="SAYIM"?"":(l.lot||""),l.ut?{v:tarihNesne(l.ut),s:XLSX_STIL.tarih}:"",l.sktTur||"",xlsxSktHucre(l.skt),yuvarla(kalanOf(l.id)),u.birim||""],rr,[])); });
-    toast("Resimler hazırlanıyor…"); const resimler=[]; for(let i=0;i<xs.length;i++){ const v=await xlsxResim(xs[i].b); if(v) resimler.push({r:3+i,c:1,veri:v}); }
+    const resimler=[]; if(resimli) toast("Resimler hazırlanıyor…"); for(let i=0;resimli&&i<xs.length;i++){ const v=await xlsxResim(xs[i].b); if(v) resimler.push({r:3+i,c:1,veri:v}); }
     const blob=xlsxOlustur([
-      {ad:"Stok",sutunlar:[6,9,34,16,12,16,9,8,18,10,28,26],satirlar:s1,donuk:3,birlesik:["A1:L1"],resimler},
+      {ad:"Stok",sutunlar:[6,...(resimli?[9]:[]),34,16,12,16,9,8,18,10,28,26],satirlar:s1,donuk:3,birlesik:[resimli?"A1:L1":"A1:K1"],resimler},
       {ad:"Partiler (STT-TETT)",sutunlar:[30,14,...(tum?[10]:[]),16,13,12,28,9,8],satirlar:s2,donuk:3}]);
-    indir("stok durumu "+trTarih(bugun())+" "+(tum?"tüm kreşler":aktifKres())+".xlsx",blob);
+    indir("stok durumu "+trTarih(bugun())+" "+(tum?"tüm kreşler":aktifKres())+(resimli?" resimli":"")+".xlsx",blob);
     toast("Excel dosyası indirildi (İndirilenler)"); }
 };
 function urunDetay(barkod, kres){

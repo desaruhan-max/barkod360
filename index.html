@@ -2277,6 +2277,11 @@ async function syEtiketOku(barkod, hazirDosya, sessiz){
   if(!(await ClaudeOkur.kullanilabilir())){ if(sessiz) return;
     dlg("Claude okuyucu kapalı",`<p>${navigator.onLine?"Fotoğraftan ürün bilgisi okumak için Claude anahtarı gerekiyor.":"İnternet yok. Fotoğraftan okuma internet gelince çalışır."}</p>${navigator.onLine?'<p class="hint">Anahtarı <b>Yedekleme</b> sayfasındaki "Claude okuyucu" kutusuna bir kez yapıştırın.</p>':""}`,[{t:"Kapat"},...(navigator.onLine?[{t:"Yedekleme sayfasına git",c:"primary",f:()=>{ setTimeout(()=>sekme("yedek"),30); }}]:[])]); return; }
   const f=hazirDosya||await gorselSec(true); if(!f) return; if(!hazirDosya) syOlay(barkod,"etiketFoto");
+  // resmi HEMEN kaydet: Claude okuyamasa ya da internet kopsa bile resim kaybolmasın
+  try{ const u0=V.urunler[barkod]; const bm=await createImageBitmap(f); const c0=document.createElement("canvas"); c0.width=bm.width; c0.height=bm.height; c0.getContext("2d").drawImage(bm,0,0);
+    if(u0 && !u0.gorselId){ u0.gorselId=await gorselKaydet(c0); kaydet(); }
+    else { const fid=await fotoKaydet(c0); const s0=V.aktifSayim; if(s0){ s0.fotolar=s0.fotolar||{}; (s0.fotolar[barkod+"|?"]=s0.fotolar[barkod+"|?"]||[]).push(fid); kaydet(); } }
+    sySonCiz&&sySonCiz(); }catch(e){ console.warn("etiket resmi",e); }
   const d=$("#syAdDur")||$("#sySktDur"); const ilerle=(p,m)=>{ const e=$("#syAdDur")||$("#sySktDur"); if(e&&m) e.textContent="⏳ "+m; };
   try{
     const {R,c}=await ClaudeOkur.urunFotoOku(f,ilerle); const u=V.urunler[barkod]; if(!u) return; const yaz=[];
@@ -2447,6 +2452,7 @@ function syIsle(bosSifir){
       sktDag.push([syLotSkt(lid)||"", y.miktar]);
       if(lid){ const fl=(s.fotolar||{})[x.b+"|"+(V.lotlar[lid].skt||"")]; if(fl&&fl.length){ const L=V.lotlar[lid]; L.fotoIds=[...new Set([...(L.fotoIds||[]),...fl])]; } }
       if(lid) lotSay[lid]=(lotSay[lid]||0)+y.miktar; else genel+=y.miktar; }
+    { const fq=(s.fotolar||{})[x.b+"|?"]; const ilkLot=Object.keys(lotSay)[0]; if(fq&&fq.length&&ilkLot&&V.lotlar[ilkLot]){ const L=V.lotlar[ilkLot]; L.fotoIds=[...new Set([...(L.fotoIds||[]),...fq])]; } }
     const ls=fefoSirala(lotlarOf(x.b,s.kres));
     let hedef={}; // lotId -> yeni miktar
     const ustune=onceki.has(x.b); // ekleme: önceki sayımda sayılan ürünün mevcut stoğu korunur, yeni okutulan üstüne eklenir

@@ -881,7 +881,11 @@ async function gorselKaydet(kaynak){ // canvas | Blob | File
   let c=kaynak; if(!(kaynak instanceof HTMLCanvasElement)){ const bm=await createImageBitmap(kaynak); c=document.createElement("canvas"); c.width=bm.width; c.height=bm.height; c.getContext("2d").drawImage(bm,0,0); }
   return fotoKaydet(c, 1400, .82);
 }
-function urunGorsel(u){ return u ? fotoAl(u.gorselId||u.fotoId, u) : Promise.resolve(null); }
+// Ürün resmi yoksa sayımda/mal kabulde çekilen etiket ya da tarih resmi gösterilir
+async function urunGorsel(u){ if(!u) return null; const d=await fotoAl(u.gorselId||u.fotoId, u); if(d) return d;
+  const ls=Object.values(V.lotlar).filter(l=>l.barkod===u.barkod&&(l.fotoIds||[]).length).sort((a,b)=>(b.girisTarihi||"").localeCompare(a.girisTarihi||""));
+  for(const l of ls) for(const id of l.fotoIds){ const x=await fotoAl(id,l); if(x) return x; }
+  return null; }
 // Resme dokununca büyük açılır (yüzen pencere): iki parmakla yakınlaştırılır, dokununca ya da ✕ ile kapanır
 function resimBuyut(src){ if(!src) return; let o=document.getElementById("resimBuyuk");
   if(!o){ o=document.createElement("div"); o.id="resimBuyuk"; o.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:flex;align-items:center;justify-content:center;overflow:auto;touch-action:pinch-zoom";
@@ -2501,6 +2505,7 @@ function urunDetay(barkod, kres){
     <div class="tw"><table class="rt"><thead><tr><th>Kreş</th><th>Lot</th><th>Üretim</th><th>STT/TETT</th><th>Giriş</th><th>Tedarikçi</th><th class="r">Kalan</th><th class="r">Fiyat</th><th></th></tr></thead><tbody>
     ${ls.map(l=>`<tr><td>${esc(KISA[l.kres])}</td><td><b>${esc(l.lot||"—")}</b>${l.bloke?' <span class="pill bad">BLOKE</span>':""}${l.red?' <span class="pill bad">RED</span>':""}</td><td class="m">${trTarih(l.ut)} ${esc(l.us||"")}</td><td>${l.sktTur||""} ${trTarih(l.skt)} ${sktPill(l.skt)}</td><td class="m">${trTarih(l.girisTarihi)}</td><td class="m">${esc(l.ted||"")}</td><td class="r"><b>${nf(kalanOf(l.id))}</b> ${esc(u.birim)}</td><td class="r">${l.fiyat!=null?nf(l.fiyat):""}</td>
       <td class="act">${l.red?"":`<button class="btn sm" data-say="${l.id}">Sayım düzelt</button> <button class="btn sm" data-blk="${l.id}">${l.bloke?"Blokeyi kaldır":"Bloke et"}</button>`} ${(l.fotoIds||[]).length?`<button class="ib" data-foto="${l.id}" title="Etiket fotoğrafı">📷</button>`:""}</td></tr>`).join("")||'<tr><td colspan="9" class="m">Stok yok</td></tr>'}</tbody></table></div>`,[{t:"Kapat"},{t:"Bilgileri düzenle",c:"primary",f:()=>{ setTimeout(()=>urunDuzenle(barkod),30); }}],true);
+  if(!u.gorselId&&!u.fotoId) urunGorsel(u).then(d=>{ if(d){ const y=$(".ozet-urun .small.muted",b); if(y&&/Resim/.test(y.textContent)){ y.remove(); const im=$("img[data-g]",b); if(im){ im.style.display=""; gorselYukle(b); } } } });
   if(!u.gorselId&&!u.fotoId){ const im=$("img[data-g]",b); const yer=document.createElement("div"); yer.className="small muted"; yer.style.cssText="width:120px;text-align:center"; yer.textContent=navigator.onLine?"Resim internette aranıyor…":"Resim yok"; if(im){ im.style.display="none"; im.after(yer); }
     resimTamamla([barkod]).then(n=>{ if(n){ yer.remove(); if(im) im.style.display=""; gorselYukle(b); } else yer.innerHTML="Resim yok.<br>📷 Görsel çek ile ekleyin"; }); }
   gorselYukle(b); const gy=async kam=>{ if(await urunGorselDegistir(barkod,kam)){ gorselYukle(b); if(AKTIF_SEKME==="urunler") SAYFA.urunler.goster(); } };

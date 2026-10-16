@@ -249,6 +249,7 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
   #yazdir table{border-collapse:collapse;width:100%;font-size:9pt}
   #yazdir th,#yazdir td{border:1px solid #999;padding:3px 5px;text-align:left}
 }
+img[data-g],.dlg img{cursor:zoom-in}
 </style>
 </head>
 <body>
@@ -881,6 +882,16 @@ async function gorselKaydet(kaynak){ // canvas | Blob | File
   return fotoKaydet(c, 1400, .82);
 }
 function urunGorsel(u){ return u ? fotoAl(u.gorselId||u.fotoId, u) : Promise.resolve(null); }
+// Resme dokununca büyük açılır (yüzen pencere): iki parmakla yakınlaştırılır, dokununca ya da ✕ ile kapanır
+function resimBuyut(src){ if(!src) return; let o=document.getElementById("resimBuyuk");
+  if(!o){ o=document.createElement("div"); o.id="resimBuyuk"; o.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:flex;align-items:center;justify-content:center;overflow:auto;touch-action:pinch-zoom";
+    o.innerHTML='<img alt="" style="max-width:100%;max-height:100%;object-fit:contain;touch-action:pinch-zoom"><button type="button" aria-label="Kapat" style="position:fixed;top:12px;right:12px;width:44px;height:44px;border-radius:50%;border:0;background:#fff;font-size:22px;font-weight:700;cursor:pointer">✕</button>';
+    o.onclick=e=>{ if(e.target.tagName!=="IMG"||e.target.dataset.tam!=="1") o.style.display="none"; };
+    const im=o.querySelector("img"); im.onclick=e=>{ e.stopPropagation(); const t=im.dataset.tam==="1"; im.dataset.tam=t?"":"1"; im.style.maxWidth=t?"100%":"none"; im.style.maxHeight=t?"100%":"none"; o.style.alignItems=t?"center":"flex-start"; o.style.justifyContent=t?"center":"flex-start"; };
+    document.body.appendChild(o); document.addEventListener("keydown",e=>{ if(e.key==="Escape") o.style.display="none"; }); }
+  const im=o.querySelector("img"); im.dataset.tam=""; im.style.maxWidth="100%"; im.style.maxHeight="100%"; o.style.alignItems="center"; o.style.justifyContent="center"; im.src=src; o.style.display="flex"; }
+document.addEventListener("click",e=>{ const i=e.target.closest&&e.target.closest("img[data-g], img[data-buyut], .dlg img"); if(!i||i.closest("#resimBuyuk")) return;
+  if(!i.src||i.style.visibility==="hidden"||i.style.display==="none"||(i.naturalWidth||0)<2) return; e.preventDefault(); e.stopPropagation(); resimBuyut(i.src); }, true);
 function gorselYukle(kap){ $$("img[data-g]",kap||document).forEach(i=>{ const u=V.urunler[i.dataset.g]; urunGorsel(u).then(d=>{ if(d){ i.src=d; i.style.visibility="visible"; i.style.display=""; } }); }); }
 function gorselSec(kamera){ return new Promise(res=>{ const i=document.createElement("input"); i.type="file"; i.accept="image/*"; if(kamera) i.capture="environment"; i.onchange=()=>res(i.files[0]||null); i.click(); }); }
 async function urunGorselDegistir(barkod, kamera){

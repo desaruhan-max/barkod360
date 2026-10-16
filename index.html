@@ -969,8 +969,13 @@ function sktUyariGoster(zorla){
 const Barkod = {
   hazir:null,
   hazirla(){ if(!this.hazir) this.hazir=ZXingWASM.prepareZXingModule({overrides:{wasmBinary:b2u(window.ZX_WASM_B64).buffer},fireImmediately:true}); return this.hazir; },
-  async oku(src, hizli){
+  sayac:0, yedek:false,
+  // uzun sayımda okuyucu hafızası dolabilir: sıfırla; telefonun kendi okuyucusu varsa ona geç
+  sifirla(){ this.hazir=null; this._bd=null; this.sayac=0; if("BarcodeDetector" in window) this.yedek=!this.yedek; },
+  async oku(src, hizli, yedek){
+    if(yedek && "BarcodeDetector" in window){ try{ return await this.yerli(src); }catch(e){ this.yedek=false; } }
     try{ await this.hazirla(); }catch(e){ return this.yerli(src); }
+    if(++this.sayac>6000){ this.sayac=0; this.hazir=null; await this.hazirla(); } // ara sıra temiz başlat
     return ZXingWASM.readBarcodes(src,{formats:["EAN13","EAN8","UPCA","UPCE","Code128","DataMatrix","QRCode","ITF","DataBar","DataBarExp"], tryHarder:!hizli, tryRotate:true, tryInvert:!hizli, maxNumberOfSymbols:4}); },
   async yerli(src){ // tarayıcının kendi barkod okuyucusu (Android Chrome)
     if(!("BarcodeDetector" in window)) throw new Error("Barkod motoru bu cihazda çalışmadı");
@@ -1470,13 +1475,25 @@ class Kamera{
   kare(maks){ const v=this.v; if(!v.videoWidth) return null; const s=maks?Math.min(1,maks/Math.max(v.videoWidth,v.videoHeight)):1;
     const c=document.createElement("canvas"); c.width=Math.round(v.videoWidth*s); c.height=Math.round(v.videoHeight*s); c.getContext("2d").drawImage(v,0,0,c.width,c.height); return c; }
   async dongu(){
-    while(this.calisiyor){
+    const ben=this.akis; let hata=0, sonZaman=-1, donuk=Date.now();
+    while(this.calisiyor && this.akis===ben){
       const t0=performance.now();
       this._n=(this._n||0)+1;
-      try{ const c=this._n%2?this.orta():this.kare(1280); if(c){ const id=c.getContext("2d").getImageData(0,0,c.width,c.height); const r=await Barkod.oku(id,this._n%3!==0); if(r.length) this.sonuc(r); } }catch(e){ console.warn(e); }
+      // görüntü donduysa (telefonun kendi kamerası açılıp kapandıktan sonra olur) kamerayı yeniden başlat
+      const tr=this.iz; const ct=this.v.currentTime;
+      if(ct!==sonZaman){ sonZaman=ct; donuk=Date.now(); }
+      if(!document.hidden && (!tr || tr.readyState!=="live" || Date.now()-donuk>2500)){ this.yenidenBaslat("görüntü dondu"); return; }
+      try{ const c=this._n%2?this.orta():this.kare(1280);
+        if(c){ const id=c.getContext("2d").getImageData(0,0,c.width,c.height);
+          // okuyucu takılırsa en fazla 3 sn bekle
+          const r=await Promise.race([Barkod.oku(id,this._n%3!==0, Barkod.yedek), new Promise((_,j)=>setTimeout(()=>j(new Error("zaman aşımı")),3000))]);
+          hata=0; if(r.length) this.sonuc(r); } }
+      catch(e){ console.warn(e); hata++;
+        if(hata>=4){ hata=0; Barkod.sifirla(); this.durum("Barkod okuyucu yenilendi · barkodu çerçeveye tutun"); } }
       await new Promise(r=>setTimeout(r,Math.max(40,140-(performance.now()-t0))));
     }
   }
+  yenidenBaslat(neden){ if(this._yb && Date.now()-this._yb<4000) return; this._yb=Date.now(); console.warn("kamera yeniden:",neden); this.durum("Kamera yeniden açılıyor…"); setTimeout(()=>{ if(AKTIF_KAMERA===this||!AKTIF_KAMERA) this.ac(); },300); }
   sonuc(liste){
     const simdi=Date.now(), bekle=this.o.tekrarMs||1600; const yeni=[];
     for(const x of liste){ if(!x.isValid) continue; const k=x.text; if(this.son[k] && simdi-this.son[k]<bekle){ this.son[k]=simdi; continue; } this.son[k]=simdi; yeni.push(barkodCoz(x.text,x.format)); }

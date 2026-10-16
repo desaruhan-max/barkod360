@@ -684,17 +684,29 @@ function xlsxOlustur(sayfalar){ // sayfalar: [{ad, sutunlar:[genişlik], satirla
 <fills count="8"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1B6B52"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE3F1EA"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFDE7E4"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFBF2E2"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF09A"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF5F0"/></patternFill></fill></fills>
 <borders count="2"><border/><border><bottom style="thin"><color rgb="FFCCCCCC"/></bottom></border></borders><cellStyleXfs count="1"><xf/></cellStyleXfs>
 <cellXfs count="15"><xf borderId="1" applyBorder="1"/><xf fontId="1" fillId="2" applyFont="1" applyFill="1"><alignment wrapText="1" vertical="center"/></xf><xf fontId="2" fillId="3" applyFont="1" applyFill="1"/><xf numFmtId="164" borderId="1" applyNumberFormat="1" applyBorder="1"/><xf fontId="5" fillId="4" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/><xf fontId="6" fillId="5" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/><xf fontId="3" applyFont="1"/><xf numFmtId="0" borderId="1" applyBorder="1"/><xf fontId="4" applyFont="1"/><xf numFmtId="164" fontId="5" fillId="4" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/><xf numFmtId="164" fontId="6" fillId="5" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/><xf fontId="7" fillId="6" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/><xf numFmtId="164" fontId="7" fillId="6" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/><xf fontId="8" fillId="7" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/><xf numFmtId="164" fontId="8" fillId="7" borderId="1" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs></styleSheet>`;
-  sayfalar.forEach((p,i)=>{ const rows=p.satirlar.map((r,ri)=>`<row r="${ri+1}">${r.map((c,ci)=>{ if(c==null||c==="") return ""; const o=(typeof c==="object"&&!(c instanceof Date))?c:{v:c}; let v=o.v, st=o.s||0; const ref=harf(ci)+(ri+1); if(v==null||v==="") return st?`<c r="${ref}" s="${st}"/>`:"";
+  sayfalar.forEach((p,i)=>{ const rsat=new Set((p.resimler||[]).map(z=>z.r)); const rows=p.satirlar.map((r,ri)=>`<row r="${ri+1}"${rsat.has(ri)?' ht="48" customHeight="1"':""}>${r.map((c,ci)=>{ if(c==null||c==="") return ""; const o=(typeof c==="object"&&!(c instanceof Date))?c:{v:c}; let v=o.v, st=o.s||0; const ref=harf(ci)+(ri+1); if(v==null||v==="") return st?`<c r="${ref}" s="${st}"/>`:"";
       if(v instanceof Date){ const n=(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate())-Date.UTC(1899,11,30))/864e5; const ds=st===4?9:st===5?10:(st||3); return `<c r="${ref}" s="${ds}"><v>${n}</v></c>`; }
       if(typeof v==="number"&&isFinite(v)) return `<c r="${ref}" s="${st}"><v>${v}</v></c>`;
       if(o.zengin) return `<c r="${ref}" s="${st}" t="inlineStr"><is>${o.zengin.map(z=>`<r><rPr>${z.b?"<b/>":""}<sz val="11"/><color rgb="${z.renk||"FF000000"}"/><rFont val="Calibri"/></rPr><t xml:space="preserve">${x(z.t)}</t></r>`).join("")}</is></c>`;
       if(v==null||v==="") return st?`<c r="${ref}" s="${st}"/>`:""; return `<c r="${ref}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`; }).join("")}</row>`).join("");
-    dosya["xl/worksheets/sheet"+(i+1)+".xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${p.donuk?`<sheetViews><sheetView workbookViewId="0"><pane ySplit="${p.donuk}" topLeftCell="A${p.donuk+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`:""}${p.sutunlar?`<cols>${p.sutunlar.map((w,ci)=>`<col min="${ci+1}" max="${ci+1}" width="${w}" customWidth="1"/>`).join("")}</cols>`:""}<sheetData>${rows}</sheetData>${(p.birlesik||[]).length?`<mergeCells count="${p.birlesik.length}">${p.birlesik.map(m=>`<mergeCell ref="${m}"/>`).join("")}</mergeCells>`:""}</worksheet>`; });
+    const res=(p.resimler||[]).filter(z=>z.veri&&z.veri.length);
+    if(res.length){ const EMU=12700; let an="";
+      res.forEach((z,k)=>{ const im="image"+(i+1)+"_"+(k+1)+".jpeg"; dosya["xl/media/"+im]=z.veri;
+        an+=`<xdr:oneCellAnchor><xdr:from><xdr:col>${z.c}</xdr:col><xdr:colOff>${3*EMU}</xdr:colOff><xdr:row>${z.r}</xdr:row><xdr:rowOff>${2*EMU}</xdr:rowOff></xdr:from><xdr:ext cx="${44*EMU}" cy="${44*EMU}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${k+2}" name="Resim ${k+1}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId${k+1}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${44*EMU}" cy="${44*EMU}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>`; });
+      dosya["xl/drawings/drawing"+(i+1)+".xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${an}</xdr:wsDr>`;
+      dosya["xl/drawings/_rels/drawing"+(i+1)+".xml.rels"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${res.map((z,k)=>`<Relationship Id="rId${k+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image${i+1}_${k+1}.jpeg"/>`).join("")}</Relationships>`;
+      dosya["xl/worksheets/_rels/sheet"+(i+1)+".xml.rels"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing${i+1}.xml"/></Relationships>`;
+      p._cizim=true; }
+    dosya["xl/worksheets/sheet"+(i+1)+".xml"]=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${p.donuk?`<sheetViews><sheetView workbookViewId="0"><pane ySplit="${p.donuk}" topLeftCell="A${p.donuk+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`:""}${p.sutunlar?`<cols>${p.sutunlar.map((w,ci)=>`<col min="${ci+1}" max="${ci+1}" width="${w}" customWidth="1"/>`).join("")}</cols>`:""}<sheetData>${rows}</sheetData>${(p.birlesik||[]).length?`<mergeCells count="${p.birlesik.length}">${p.birlesik.map(m=>`<mergeCell ref="${m}"/>`).join("")}</mergeCells>`:""}${p._cizim?'<drawing r:id="rId1"/>':""}</worksheet>`; });
+  // hücre yazıları dikeyde ortalı (resimli satırlarda düzgün görünsün)
+  dosya["xl/styles.xml"]=dosya["xl/styles.xml"].replace(/<cellXfs count="(\d+)">([\s\S]*?)<\/cellXfs>/,(m,n,ic)=>`<cellXfs count="${n}">`+ic.replace(/<xf ([^>]*?)\/>/g,'<xf $1 applyAlignment="1"><alignment vertical="center"/></xf>')+"</cellXfs>");
+  { const ct=dosya["[Content_Types].xml"]; const ek='<Default Extension="jpeg" ContentType="image/jpeg"/>'+sayfalar.map((p,i)=>p._cizim?`<Override PartName="/xl/drawings/drawing${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`:"").join("");
+    dosya["[Content_Types].xml"]=ct.replace('<Default Extension="xml"',ek+'<Default Extension="xml"'); }
   // ZIP (sıkıştırmasız)
   const crcT=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
   const crc=b=>{ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c=crcT[(c^b[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; };
   const parcalar=[], merkez=[]; let ofs=0;
-  for(const ad in dosya){ const ab=enc.encode(ad), d=enc.encode(dosya[ad]), c=crc(d);
+  for(const ad in dosya){ const ab=enc.encode(ad), d=(dosya[ad] instanceof Uint8Array)?dosya[ad]:enc.encode(dosya[ad]), c=crc(d);
     const h=new DataView(new ArrayBuffer(30)); h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint32(14,c,true); h.setUint32(18,d.length,true); h.setUint32(22,d.length,true); h.setUint16(26,ab.length,true);
     parcalar.push(new Uint8Array(h.buffer),ab,d);
     const m=new DataView(new ArrayBuffer(46)); m.setUint32(0,0x02014b50,true); m.setUint16(4,20,true); m.setUint16(6,20,true); m.setUint16(8,0x0800,true); m.setUint32(16,c,true); m.setUint32(20,d.length,true); m.setUint32(24,d.length,true); m.setUint16(28,ab.length,true); m.setUint32(42,ofs,true);
@@ -703,6 +715,11 @@ function xlsxOlustur(sayfalar){ // sayfalar: [{ad, sutunlar:[genişlik], satirla
   e.setUint32(0,0x06054b50,true); e.setUint16(8,n,true); e.setUint16(10,n,true); e.setUint32(12,mb,true); e.setUint32(16,ofs,true);
   return new Blob([...parcalar,...merkez,new Uint8Array(e.buffer)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
 }
+// Excel için ürün resmi (600 px kare: hücrede küçük görünür, büyütünce net, beyaz zeminli JPEG baytları)
+async function xlsxResim(barkod){ try{ const u=V.urunler[barkod]; const d=await urunGorsel(u); if(!d) return null;
+  const im=new Image(); im.src=d; await im.decode(); const N=600, c=document.createElement("canvas"); c.width=N; c.height=N; const x=c.getContext("2d"); x.fillStyle="#fff"; x.fillRect(0,0,N,N);
+  const k=Math.min(N/im.naturalWidth,N/im.naturalHeight); const w=im.naturalWidth*k, h=im.naturalHeight*k; x.drawImage(im,(N-w)/2,(N-h)/2,w,h);
+  const b=await new Promise(r=>c.toBlob(r,"image/jpeg",.8)); return new Uint8Array(await b.arrayBuffer()); }catch(e){ return null; } }
 const tarihNesne = iso => iso? new Date(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10)) : null;
 const csvSayi = n => (n==null||n==="")?"":String(yuvarla(n)).replace(".",",");
 
@@ -2495,13 +2512,14 @@ function sayimSirasi(kres){ const m=new Map(); let n=0; const ss=V.sayimlar.filt
   return m; }
 function syTutanakSktMin(x){ if(x.sktMin) return x.sktMin; const ts=[...String(x.skt||"").matchAll(/(\d{2})\.(\d{2})\.(\d{4})/g)].map(m=>m[3]+"-"+m[2]+"-"+m[1]).sort(); return ts[0]||""; }
 const SY_RENK_HTML={[XLSX_STIL.kirmizi]:"#f8b4b0",[XLSX_STIL.turuncu]:"#ffc98f",[XLSX_STIL.sari]:"#fff09a",[XLSX_STIL.yesil]:"#cdebd6"};
-function syTutanakExcel(k,satir){
-  const H=["Sıra","Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","Alerjenler","STT/TETT dağılımı","En yakın STT/TETT","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
+async function syTutanakExcel(k,satir){
+  const H=["Sıra","Resim","Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","Alerjenler","STT/TETT dağılımı","En yakın STT/TETT","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
   const rows=[[{v:"STOK SAYIM TUTANAĞI · "+k.kres+" · "+trTarihSaat(k.bit)+(k.sayan?" · Sayan: "+k.sayan:""),s:XLSX_STIL.ust}],xlsxRenkAciklama(),H.map(v=>({v,s:XLSX_STIL.baslik}))];
   satir.forEach((x,i)=>{ const t=syTutanakSktMin(x); const r=xlsxSktRenk(t); const ft=x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null);
-    rows.push(xlsxSatirBoya([i+1,x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",alerjenHucre(x.barkod),x.skt||"",xlsxSktHucre(t),x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r,[])); });
+    rows.push(xlsxSatirBoya([i+1,"",x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",alerjenHucre(x.barkod),x.skt||"",xlsxSktHucre(t),x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r,[])); });
+  toast("Resimler hazırlanıyor…"); const resimler=[]; for(let i=0;i<satir.length;i++){ const v=await xlsxResim(satir[i].barkod); if(v) resimler.push({r:3+i,c:1,veri:v}); }
   rows.push([{v:"Toplam fark: "+tl(k.farkTutar),s:XLSX_STIL.kalin}]);
-  indir("stok sayım "+trTarih(k.bit.slice(0,10))+" "+k.kres+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,34,16,16,8,9,9,16,26,30,28,19,9,10,11],satirlar:rows,donuk:3}]));
+  indir("stok sayım "+trTarih((d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()))(new Date(k.bit)))+" "+k.kres+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,9,34,16,16,8,9,9,16,26,30,28,19,9,10,11],satirlar:rows,donuk:3,resimler}]));
   toast("Excel dosyası indirildi (İndirilenler)"); }
 function syTutanak(k){
   const satir=syTutanakSira(k.satirlar);
@@ -2545,7 +2563,7 @@ SAYFA.stok = {
     $$("#stTablo tr[data-b]").forEach(t=>t.onclick=()=>urunDetay(t.dataset.b, kap==="tum"?null:aktifKres()));
     gorselYukle($("#stTablo")); resimTamamla(r.map(x=>x.b),()=>{ if(AKTIF_SEKME==="stok") gorselYukle($("#stTablo")); });
   },
-  csv(){ // Excel: kategori yok; ürünler sayımda okutulduğu sıraya göre (en son sayım önce), hiç sayılmayanlar en sonda
+  async csv(){ // Excel: kategori yok; ürünler sayımda okutulduğu sıraya göre (en son sayım önce), hiç sayılmayanlar en sonda
     const tum=$("#stKapsam").value==="tum"; const kres=tum?null:aktifKres(); const r=this.veri();
     const sira=sayimSirasi(kres);
     const sr=b=>sira.has(b)?sira.get(b):1e9;
@@ -2554,9 +2572,9 @@ SAYFA.stok = {
     const baslik=(t)=>[{v:t,s:XLSX_STIL.ust}];
     const kapsamAd=tum?"Tüm kreşler":aktifKres();
     // 1. sayfa: stok (sayım sırası)
-    const H1=["Sıra","Ürün","Marka","Net miktar","Barkod","Miktar","Birim","Koli","Parti","En yakın STT/TETT","Alerjenler"];
+    const H1=["Sıra","Resim","Ürün","Marka","Net miktar","Barkod","Miktar","Birim","Koli","Parti","En yakın STT/TETT","Alerjenler"];
     const s1=[baslik("BARKOD360 · Stok Durumu · "+kapsamAd+" · "+trTarih(bugun())),xlsxRenkAciklama(),H1.map(v=>({v,s:XLSX_STIL.baslik}))];
-    xs.forEach((x,i)=>{ const [dt,ds,rr]=durum(x.skt); s1.push(xlsxSatirBoya([i+1,x.u.ad,x.u.marka||"",x.u.net||"",x.b,{v:yuvarla(x.mik),s:XLSX_STIL.sayi},x.u.birim||"",koliMetin(x.u,x.mik)||"",x.lot==="SAYIM"?"":(x.lot||""),xlsxSktHucre(x.skt),alerjenHucre(x.b)],rr,[])); });
+    xs.forEach((x,i)=>{ const [dt,ds,rr]=durum(x.skt); s1.push(xlsxSatirBoya([i+1,"",x.u.ad,x.u.marka||"",x.u.net||"",x.b,{v:yuvarla(x.mik),s:XLSX_STIL.sayi},x.u.birim||"",koliMetin(x.u,x.mik)||"",x.lot==="SAYIM"?"":(x.lot||""),xlsxSktHucre(x.skt),alerjenHucre(x.b)],rr,[])); });
     s1.push([]); s1.push([{v:"Toplam "+r.length+" ürün çeşidi",s:XLSX_STIL.kalin}]);
     // 2. sayfa: partiler (her STT/TETT ayrı satır), aynı sıra
     const H2=["Ürün","Marka",...(tum?["Kreş"]:[]),"Parti / Lot","Üretim tarihi","STT/TETT türü","STT/TETT","Miktar","Birim"];
@@ -2564,8 +2582,9 @@ SAYFA.stok = {
     const ls=Object.values(V.lotlar).filter(l=>(!kres||l.kres===kres)&&!l.red&&kalanOf(l.id)>0).map(l=>({l,u:V.urunler[l.barkod]||{ad:l.barkod}}));
     ls.sort((a,b)=>sr(a.l.barkod)-sr(b.l.barkod)||a.u.ad.localeCompare(b.u.ad,"tr")||(a.l.skt||"9").localeCompare(b.l.skt||"9"));
     ls.forEach(({l,u})=>{ const [dt,ds,rr]=durum(l.skt); s2.push(xlsxSatirBoya([u.ad,u.marka||"",...(tum?[KISA[l.kres]||l.kres]:[]),l.lot==="SAYIM"?"":(l.lot||""),l.ut?{v:tarihNesne(l.ut),s:XLSX_STIL.tarih}:"",l.sktTur||"",xlsxSktHucre(l.skt),yuvarla(kalanOf(l.id)),u.birim||""],rr,[])); });
+    toast("Resimler hazırlanıyor…"); const resimler=[]; for(let i=0;i<xs.length;i++){ const v=await xlsxResim(xs[i].b); if(v) resimler.push({r:3+i,c:1,veri:v}); }
     const blob=xlsxOlustur([
-      {ad:"Stok",sutunlar:[6,34,16,12,16,9,8,18,10,28,26],satirlar:s1,donuk:3,birlesik:["A1:K1"]},
+      {ad:"Stok",sutunlar:[6,9,34,16,12,16,9,8,18,10,28,26],satirlar:s1,donuk:3,birlesik:["A1:L1"],resimler},
       {ad:"Partiler (STT-TETT)",sutunlar:[30,14,...(tum?[10]:[]),16,13,12,28,9,8],satirlar:s2,donuk:3}]);
     indir("stok durumu "+trTarih(bugun())+" "+(tum?"tüm kreşler":aktifKres())+".xlsx",blob);
     toast("Excel dosyası indirildi (İndirilenler)"); }

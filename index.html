@@ -265,6 +265,7 @@ img[data-g],.dlg img{cursor:zoom-in}
     <div class="sep"></div>
     <button data-tab="kabul"><span class="i"><svg viewBox="0 0 24 24"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14"/></svg></span>MAL KABUL (OKUT)</button>
     <button data-tab="cikis"><span class="i"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></span>STOKTAN ÇIKIŞ</button>
+    <button data-tab="sevk"><span class="i"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span>SEVK</button>
     <button data-tab="sayim"><span class="i"><svg viewBox="0 0 24 24"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2"/><path d="M9 13l2 2 4-4"/></svg></span>STOK SAYIMI</button>
     <button data-tab="stok"><span class="i"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span>STOK DURUMU</button>
     <button data-tab="skt"><span class="i"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg></span>STT / TETT TAKİBİ</button>
@@ -292,6 +293,10 @@ img[data-g],.dlg img{cursor:zoom-in}
       <span class="ico"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></span>
       <span class="kt">STOKTAN ÇIKIŞ</span><span class="kd">Mutfağa ver, fire, imha, iade, kreşe transfer · ilk son kullanma tarihli parti önce çıkar (FEFO)</span>
       <span class="ks" id="kCikisSt"></span></button>
+    <button class="kbtn o" data-go="sevk"><span class="arr">→</span>
+      <span class="ico"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span>
+      <span class="kt">SEVK</span><span class="kd">Kreşler arası gönderim · hangi üründen ne kadar, nereden nereye, hangi tarihte</span>
+      <span class="ks"></span></button>
     <button class="kbtn s" data-go="sayim"><span class="arr">→</span>
       <span class="ico"><svg viewBox="0 0 24 24"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2"/><path d="M9 13l2 2 4-4"/></svg></span>
       <span class="kt">STOK SAYIMI</span><span class="kd">Rafları okut · her ürünün STT/TETT'sini seç · farklar ve tutanak kendiliğinden çıkar</span>
@@ -441,6 +446,31 @@ img[data-g],.dlg img{cursor:zoom-in}
 </section>
 
 <!-- ============ SKT ============ -->
+<!-- ============ SEVK ============ -->
+<section class="tab" id="tab-sevk">
+  <div class="sec-h"><h2>Sevk (kreşler arası)</h2>
+    <div class="sp"><button class="btn sm" id="svExcel">Excel'e aktar</button></div></div>
+  <div class="grid2">
+    <div><div class="card">
+      <h3>Yeni sevk</h3>
+      <div class="fg">
+        <label class="f">Sevk tarihi<input id="sv_tarih" inputmode="numeric" placeholder="gg.aa.yyyy" style="font-size:16px"></label>
+        <label class="f">Nereden<select id="sv_nereden" style="font-size:16px"></select></label>
+        <label class="f">Nereye<select id="sv_nereye" style="font-size:16px"></select></label>
+      </div>
+      <label class="f">Ürün <span class="small muted">(yazmaya başlayın; listede yoksa adını yazın)</span><input id="sv_urun" list="sv_urunler" autocomplete="off" placeholder="Örn. Şekerli Vanilin" style="font-size:16px"><datalist id="sv_urunler"></datalist></label>
+      <div class="small muted" id="sv_urunBilgi" style="margin:-4px 0 8px"></div>
+      <div class="inrow" style="gap:8px;align-items:flex-end"><label class="f" style="flex:1">Miktar<input id="sv_miktar" type="number" min="0" step="any" inputmode="decimal" style="font-size:20px"></label>
+        <label class="f" style="width:110px">Birim<select id="sv_birim" style="font-size:16px"><option>kg</option><option>adet</option><option>lt</option><option>paket</option><option>koli</option><option>g</option></select></label></div>
+      <label class="f">Açıklama<input id="sv_ack" placeholder="Örn. ihtiyaç üzerine" style="font-size:16px"></label>
+      <label class="small" style="display:block;margin:6px 0"><input type="checkbox" id="sv_stok"> Gönderen kreşin stoğundan düş, alan kreşin stoğuna ekle</label>
+      <p class="hint" id="sv_stokBilgi">Geçmiş tarihli ya da stokta olmayan ürünlerde sevk yalnız kayıt olarak tutulur.</p>
+      <button class="btn primary" id="sv_kaydet" style="width:100%">Sevki kaydet</button>
+    </div></div>
+    <div><div class="card"><div class="toolbar"><h3 style="margin:0;flex:1">Sevkler</h3><select id="sv_filtre" style="font-size:14px"><option value="">Tüm kreşler</option></select></div><div id="sv_liste"></div></div></div>
+  </div>
+</section>
+
 <section class="tab" id="tab-skt">
   <div class="sec-h"><h2>STT / TETT Takibi</h2><span class="kr" data-kres></span>
     <div class="sp"><button class="btn sm" id="sktUyari">⚠ Yaklaşanları göster</button><button class="btn sm" id="sktBildir">🔔 Telefona bildirim</button><button class="btn sm" id="sktYaz">Listeyi yazdır</button></div></div>
@@ -747,7 +777,7 @@ const DB = {
   sil(k){ return this.islem("readwrite", s=>s.delete(k)); },
   anahtarlar(){ return this.islem("readonly", s=>s.getAllKeys()); }
 };
-function bosVeri(){ return {surum:1, urunler:{}, lotlar:{}, hareketler:[], sayimlar:[], aktifSayim:null, sayimBekleyen:{},
+function bosVeri(){ return {surum:1, urunler:{}, lotlar:{}, hareketler:[], sayimlar:[], sevkler:[], aktifSayim:null, sayimBekleyen:{},
   ayar:{aktifKres:KRESLER[0], tedarikciler:TEDARIKCI_VARSAYILAN.slice(), sonYedek:null, icKodSayac:1}}; }
 let V = bosVeri();
 // Her kreşin yarım sayımı ayrı tutulur: kreş değişince açık sayım bekletmeye alınır, yeni kreşin bekleyen sayımı açılır
@@ -768,7 +798,7 @@ async function yerelKaydet(){ try{ await DB.yaz("veri",V); await DB.yaz("senk",{
    Belgede her varlık için {v, ts} ya da {sil, ts}; birleştirmede en yeni ts kazanır.
    İnternet yokken kayıtlar telefonda bekler, bağlantı gelince gönderilir. */
 const SENK = {db:null, assets:null, cihaz:null, SON:{}, TS:{}, kova:{}, kirli:{}, gonderildi:{}, calisiyor:false, durum:"yerel", son:null, abone:null};
-function varliklar(){ const o={}; for(const k in V.urunler) o["u:"+k]=V.urunler[k]; for(const k in V.lotlar) o["l:"+k]=V.lotlar[k]; for(const h of V.hareketler) o["h:"+h.id]=h; for(const x of V.sayimlar) o["s:"+x.id]=x; return o; }
+function varliklar(){ const o={}; for(const k in V.urunler) o["u:"+k]=V.urunler[k]; for(const k in V.lotlar) o["l:"+k]=V.lotlar[k]; for(const h of V.hareketler) o["h:"+h.id]=h; for(const x of V.sayimlar) o["s:"+x.id]=x; for(const x of (V.sevkler||[])) o["v:"+x.id]=x; return o; }
 function senkBaslangic(){ SENK.SON={}; const c=varliklar(); for(const k in c) SENK.SON[k]=JSON.stringify(c[k]); }
 function aktifKovaId(){ const g=bugun(); let n=0, id; while(true){ id=g+"_"+SENK.cihaz+(n?"_"+n:""); const k=SENK.kova[id]; if(!k || JSON.stringify(k).length<180000) return id; n++; } }
 function senkFark(){
@@ -788,6 +818,7 @@ function uzakUygula(belgeler){
       if(tip==="u"){ if(r.sil) delete V.urunler[id]; else V.urunler[id]=r.v; }
       else if(tip==="l"){ if(r.sil) delete V.lotlar[id]; else V.lotlar[id]=r.v; }
       else if(tip==="s"){ V.sayimlar=V.sayimlar.filter(x=>x.id!==id); if(!r.sil) V.sayimlar.push(r.v); }
+      else if(tip==="v"){ V.sevkler=(V.sevkler||[]).filter(x=>x.id!==id); if(!r.sil) V.sevkler.push(r.v); }
       else if(tip==="h"){ if(!hIdx){ hIdx={}; V.hareketler.forEach((h,i)=>hIdx[h.id]=i); }
         if(r.sil){ if(hIdx[id]!=null){ V.hareketler.splice(hIdx[id],1); hIdx=null; } }
         else if(hIdx[id]!=null) V.hareketler[hIdx[id]]=r.v; else { hIdx[id]=V.hareketler.length; V.hareketler.push(r.v); } }
@@ -2858,6 +2889,57 @@ SAYFA.yedek = {
   if(!ARTIFACT && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
   window.__B360_HAZIR=true;
 })();
+
+/* ================== SEVK (kreşler arası) ================== */
+SAYFA.sevk = {
+  ilk:false,
+  urunBul(metin){ metin=String(metin||"").trim(); if(!metin) return null; const d=metin.replace(/\D/g,"");
+    if(/^\d{8,14}$/.test(d)&&V.urunler[d]) return V.urunler[d];
+    const t=katla(metin); return Object.values(V.urunler).find(u=>katla(u.ad+(u.marka?" · "+u.marka:""))===t)||Object.values(V.urunler).find(u=>katla(u.ad)===t)||null; },
+  durum(){ const u=this.urunBul($("#sv_urun").value); const n=$("#sv_nereden").value; const tr=this.tarih();
+    const stok=u?stokOf(u.barkod,n):0; const bugunMu=tr===bugun();
+    $("#sv_urunBilgi").textContent=u?("Barkod "+u.barkod+" · "+n+" stoğu: "+nf(stok)+" "+(u.birim||"")):"";
+    if(u&&u.birim&&!this._birimElle) $("#sv_birim").value=[...$("#sv_birim").options].some(o=>o.value===u.birim)?u.birim:$("#sv_birim").value;
+    const ok=!!u&&stok>0&&bugunMu; const c=$("#sv_stok"); c.disabled=!ok; if(!ok) c.checked=false; else if(!this._stokElle) c.checked=true;
+    $("#sv_stokBilgi").textContent=ok?"İşaretliyse ürün gönderen kreşin stoğundan düşer, alan kreşin stoğuna eklenir.":(!u?"Ürün listede yoksa sevk yalnız kayıt olarak tutulur.":!bugunMu?"Geçmiş tarihli sevk yalnız kayıt olarak tutulur.":"Gönderen kreşte bu ürünün stoğu yok; sevk yalnız kayıt olarak tutulur."); },
+  tarih(){ const d=$("#sv_tarih").value.replace(/\D/g,""); if(d.length===8) return tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)); if(d.length===6) return tarihGecerli(2000+(+d.slice(4,6)),+d.slice(2,4),+d.slice(0,2)); return null; },
+  goster(){ kresCiz();
+    if(!this.ilk){ this.ilk=true; const op=KRESLER.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`).join("");
+      $("#sv_nereden").innerHTML=op; $("#sv_nereye").innerHTML=op; $("#sv_filtre").innerHTML='<option value="">Tüm kreşler</option>'+op;
+      $("#sv_tarih").value=trTarih(bugun()); tarihMaske($("#sv_tarih"));
+      ["sv_urun","sv_nereden","sv_tarih"].forEach(id=>{ $("#"+id).addEventListener("input",()=>this.durum()); $("#"+id).addEventListener("change",()=>this.durum()); });
+      $("#sv_birim").onchange=()=>{ this._birimElle=true; }; $("#sv_stok").onchange=()=>{ this._stokElle=true; };
+      $("#sv_kaydet").onclick=()=>this.kaydet(); $("#sv_filtre").onchange=()=>this.liste(); $("#svExcel").onclick=()=>this.excel(); }
+    $("#sv_nereden").value=aktifKres(); if($("#sv_nereye").value===aktifKres()) $("#sv_nereye").value=KRESLER.find(k=>k!==aktifKres());
+    $("#sv_urunler").innerHTML=Object.values(V.urunler).filter(u=>!u.tanimsiz).sort((a,b)=>a.ad.localeCompare(b.ad,"tr")).map(u=>`<option value="${esc(u.ad+(u.marka?" · "+u.marka:""))}">`).join("");
+    this.durum(); this.liste(); },
+  kaydet(){
+    const t=this.tarih(); if(!t){ toast("Sevk tarihini yazın: 18.09.2026",1); return; }
+    const n=$("#sv_nereden").value, h=$("#sv_nereye").value; if(n===h){ toast("Nereden ve nereye aynı kreş olamaz",1); return; }
+    const metin=$("#sv_urun").value.trim(); if(!metin){ toast("Ürünü yazın",1); return; }
+    const m=+$("#sv_miktar").value; if(!(m>0)){ toast("Miktarı yazın",1); return; }
+    const u=this.urunBul(metin); const birim=$("#sv_birim").value; const stokla=$("#sv_stok").checked&&!$("#sv_stok").disabled;
+    const sv={id:uid("v"),t,nereden:n,nereye:h,barkod:u?u.barkod:"",ad:u?u.ad:metin,marka:u?(u.marka||""):"",miktar:m,birim,ack:$("#sv_ack").value.trim(),stok:false,kayit:new Date().toISOString()};
+    if(stokla){ const ls=fefoSirala(lotlarOf(u.barkod,n)).filter(l=>!l.bloke&&kalanOf(l.id)>0); let kalan=m; const grup=uid("g");
+      if(ls.reduce((a,l)=>a+kalanOf(l.id),0)+1e-9<m){ toast(n+" stoğunda yeterli "+u.ad+" yok ("+nf(stokOf(u.barkod,n))+" "+u.birim+")",1); return; }
+      for(const l of ls){ if(kalan<=1e-9) break; const al=Math.min(kalan,kalanOf(l.id)); kalan=yuvarla(kalan-al);
+        hareketEkle({tur:"TRANSFER_CIKIS",kres:n,barkod:u.barkod,lotId:l.id,miktar:-al,fiyat:l.fiyat,ack:"Sevk → "+h+(sv.ack?" "+sv.ack:""),hedef:h,grup,sevkId:sv.id});
+        let yl=Object.values(V.lotlar).find(x=>x.kaynakLotId===l.id&&x.kres===h); if(!yl){ yl=Object.assign({},l,{id:uid("l"),kres:h,kaynakLotId:l.id,girisTarihi:t,not:"Sevk: "+n}); V.lotlar[yl.id]=yl; }
+        hareketEkle({tur:"TRANSFER_GIRIS",kres:h,barkod:u.barkod,lotId:yl.id,miktar:al,fiyat:l.fiyat,ack:"Sevk ← "+n+(sv.ack?" "+sv.ack:""),grup,sevkId:sv.id}); }
+      sv.stok=true; sv.grup=grup; }
+    (V.sevkler=V.sevkler||[]).push(sv); kaydet(); bip(); toast("Sevk kaydedildi: "+sv.ad+" · "+nf(m)+" "+birim+" · "+KISA[n]+" → "+KISA[h]+(sv.stok?" (stoğa işlendi)":" (kayıt)"));
+    $("#sv_urun").value=""; $("#sv_miktar").value=""; $("#sv_ack").value=""; this._birimElle=false; this._stokElle=false; this.durum(); this.liste(); },
+  veri(){ const f=$("#sv_filtre").value; const r=(V.sevkler||[]).slice();
+    // programdan önce Stoktan Çıkış'tan yapılan transferler de listede görünsün
+    for(const x of V.hareketler) if(x.tur==="TRANSFER_CIKIS"&&!x.sevkId&&!x.tersId){ const u=V.urunler[x.barkod]||{}; r.push({id:"h"+x.id,t:x.t.slice(0,10),nereden:x.kres,nereye:x.hedef||"",barkod:x.barkod,ad:u.ad||x.barkod,marka:u.marka||"",miktar:-x.miktar,birim:u.birim||"",ack:x.ack||"",stok:true,eski:true}); }
+    return r.filter(x=>!f||x.nereden===f||x.nereye===f).sort((a,b)=>(b.t||"").localeCompare(a.t||"")||(b.kayit||"").localeCompare(a.kayit||"")); },
+  liste(){ const r=this.veri();
+    $("#sv_liste").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Nereden → Nereye</th><th>Ürün</th><th class="r">Miktar</th><th></th></tr></thead><tbody>${r.map(x=>`<tr><td class="m">${trTarih(x.t)}</td><td><b>${esc(KISA[x.nereden]||x.nereden)}</b> → <b>${esc(KISA[x.nereye]||x.nereye)}</b></td><td>${esc(x.ad)}${x.marka?' <span class="muted">· '+esc(x.marka)+"</span>":""}${x.ack?'<div class="small muted">'+esc(x.ack)+"</div>":""}</td><td class="r"><b>${nf(x.miktar)}</b> ${esc(x.birim)}<div>${x.stok?'<span class="pill ok">stoğa işlendi</span>':'<span class="pill gh">kayıt</span>'}</div></td><td class="act">${!x.stok&&!x.eski?`<button class="ib" data-svsil="${x.id}" title="Sil">🗑</button>`:""}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Henüz sevk yok</div>';
+    $$("[data-svsil]").forEach(b=>b.onclick=async()=>{ if(!await onayla("Bu sevk kaydı silinsin mi?","Sil")) return; V.sevkler=V.sevkler.filter(x=>x.id!==b.dataset.svsil); kaydet(); this.liste(); }); },
+  excel(){ const r=this.veri(); const H=["Sevk tarihi","Nereden","Nereye","Ürün","Marka","Barkod","Miktar","Birim","Açıklama","Durum"];
+    const rows=[[{v:"Sevkler (kreşler arası) · "+trTarih(bugun()),s:XLSX_STIL.ust}],[],H.map(v=>({v,s:XLSX_STIL.baslik})),...r.map(x=>[x.t?{v:tarihNesne(x.t),s:XLSX_STIL.tarih}:"",x.nereden,x.nereye,x.ad,x.marka||"",x.barkod||"",x.miktar,x.birim,x.ack||"",x.stok?"Stoğa işlendi":"Kayıt"])];
+    indir("sevkler "+trTarih(bugun())+".xlsx",xlsxOlustur([{ad:"Sevkler",sutunlar:[12,22,22,34,16,16,9,8,30,14],satirlar:rows,donuk:3}])); toast("Excel dosyası indirildi (İndirilenler)"); }
+};
 
 </script>
 </body>

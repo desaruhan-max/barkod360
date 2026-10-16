@@ -640,6 +640,24 @@ const XLSX_STIL={baslik:1,kategori:2,normal:0,tarih:3,kirmizi:4,turuncu:5,kalin:
 function xlsxSktRenk(skt){ if(!skt) return {ad:"tarih yok",s:0,t:XLSX_STIL.tarih}; const g=gunFark(skt); // programdaki etiketin aynısı
   if(g<0) return {ad:(-g)+" gün geçti",s:XLSX_STIL.kirmizi,t:XLSX_STIL.tarihKirmizi}; if(g===0) return {ad:"bugün son",s:XLSX_STIL.kirmizi,t:XLSX_STIL.tarihKirmizi}; if(g<=3) return {ad:g+" gün kaldı",s:XLSX_STIL.kirmizi,t:XLSX_STIL.tarihKirmizi};
   if(g<=7) return {ad:g+" gün kaldı",s:XLSX_STIL.turuncu,t:XLSX_STIL.tarihTuruncu}; if(g<=30) return {ad:g+" gün",s:XLSX_STIL.turuncu,t:XLSX_STIL.tarihTuruncu}; return {ad:g+" gün",s:XLSX_STIL.yesil,t:XLSX_STIL.tarihYesil}; }
+// Alerjen kuralı: kartta alerjen yoksa ürünün adından ve içindekilerden bulunur (TGK 14 alerjen)
+const ALERJEN_KURAL=[
+  ["Gluten",/\b(UN|UNU|IRMIK|SEHRIYE|ERISTE|MAKARNA|BULGUR|BUGDAY|ARPA|CAVDAR|YULAF|GALETA|BISKUVI|EKMEK|YUFKA|KUSKUS|SIMIT|GOFRET|KEK|POGACA|LAVAS|NISASTA|KADAYIF|MANTI|GLUTEN)\b/, /\b(PIRINC|MISIR|NOHUT|PATATES|MERCIMEK|KESTANE|BADEM|HINDISTAN)\s+(UNU|NISASTASI|UN)\b|GLUTENSIZ/],
+  ["Süt (laktoz)",/\b(SUT|SUTU|SUTLU|YOGURT|PEYNIR|PEYNIRI|KASAR|KASARI|TEREYAG|TEREYAGI|TEREYAGLI|KAYMAK|AYRAN|KREMA|LABNE|LOR|KEFIR|LAKTOZ|PEYNIRALTI|SUT TOZU)\b/, /HINDISTAN CEVIZI SUTU|LAKTOZSUZ|BADEM SUTU|SOYA SUTU|YULAF SUTU/],
+  ["Yumurta",/\bYUMURTA/],
+  ["Sert kabuklu meyveler",/\b(FINDIK|FINDIGI|CEVIZ|CEVIZI|BADEM|BADEMI|ANTEP FISTIG|FISTIK ICI|KAJU|PEKAN|MAKADAMYA)/, /HINDISTAN CEVIZ|YER FISTIG/],
+  ["Yer fıstığı",/\bYER FISTIG|FISTIK EZMESI/],
+  ["Susam",/\b(SUSAM|TAHIN)/],
+  ["Soya",/\bSOYA/],
+  ["Balık",/\b(BALIK|TON BALIG|HAMSI|SOMON|SARDALYA|USKUMRU|ALABALIK|LEVREK|CIPURA)/],
+  ["Kabuklular",/\b(KARIDES|YENGEC|ISTAKOZ)/],
+  ["Yumuşakçalar",/\b(MIDYE|KALAMAR|AHTAPOT)/],
+  ["Hardal",/\bHARDAL/], ["Kereviz",/\bKEREVIZ/] ];
+function alerjenTahmin(u){ if(!u) return []; const t=" "+katla((u.ad||"")+" "+(u.icerik||""))+" "; const o=[];
+  for(const [a,ev,hayir] of ALERJEN_KURAL){ if(!ev.test(t)) continue; if(hayir){ const tt=t.replace(new RegExp(hayir.source,"g")," "); if(!ev.test(tt)) continue; } o.push(a); }
+  return o; }
+// kartında alerjen yazmayan ürünlere kuraldan alerjen yaz (elle düzenlenmiş kartlara dokunulmaz)
+function alerjenleriTamamla(){ let n=0; for(const b in V.urunler){ const u=V.urunler[b]; if(!u||u.alerjenElle||u.tanimsiz||(u.alerjen||[]).length) continue; const a=alerjenTahmin(u); if(a.length){ u.alerjen=a; u.alerjenOto=true; n++; } } return n; }
 // ürünün alerjenleri (kart bilgisinden)
 function alerjenMetin(b){ const u=V.urunler[b]; const a=(u&&u.alerjen||[]).filter(Boolean); return a.join(", "); }
 function alerjenHucre(b){ const t=alerjenMetin(b); return t?{v:"Alerjenler: "+t,s:XLSX_STIL.turuncu}:""; }
@@ -724,7 +742,7 @@ function kresDegis(k){ if(k===V.ayar.aktifKres) return; V.ayar.aktifKres=k; sayi
 function yarimSayimlar(){ const o=[]; if(V.aktifSayim) o.push(V.aktifSayim); for(const k in (V.sayimBekleyen||{})) o.push(V.sayimBekleyen[k]); return o; }
 let KALAN = {};          // lotId -> kalan miktar (hareketlerden hesaplanır)
 let _kt=null;
-function kaydet(){ hesapla(); const d=senkFark(); clearTimeout(_kt); _kt=setTimeout(()=>{ yerelKaydet(); },120); if(d) setTimeout(senkCalis,400); }
+function kaydet(){ try{ alerjenleriTamamla(); }catch(e){} hesapla(); const d=senkFark(); clearTimeout(_kt); _kt=setTimeout(()=>{ yerelKaydet(); },120); if(d) setTimeout(senkCalis,400); }
 async function kaydetHemen(){ hesapla(); senkFark(); clearTimeout(_kt); await yerelKaydet(); senkCalis(); }
 async function yerelKaydet(){ try{ await DB.yaz("veri",V); await DB.yaz("senk",{cihaz:SENK.cihaz,kova:SENK.kova,kirli:SENK.kirli,TS:SENK.TS,gonderildi:SENK.gonderildi}); }catch(e){ toast("Kayıt hatası: "+e,1); } senkGoster();  try{ sktRozet(); sktOzetYaz(); }catch(_){} }
 
@@ -2625,7 +2643,7 @@ function urunDuzenle(kod, yeni){
     ${yeni?'<p class="hint">Bu iç kod (20… ile başlar) yalnızca kurum içinde geçerlidir. "Etiket Bas"tan barkodunu basıp ürünün kabına yapıştırabilirsiniz.</p>':""}`,
     [ ...(yeni?[]:[{t:"Kartı sil",c:"danger",f:()=>{ setTimeout(()=>urunSil(kod),30); }}]),
       {t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const ad=$("#ue_ad").value.trim(); if(!ad){ toast("Ürün adı gerekli",1); return false; }
-      V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),grupOto:false,icerik:$("#ue_icerik").value.trim(),koliAdet:$("#ue_koliAdet").value===""?null:+$("#ue_koliAdet").value,koliBarkod:$("#ue_koliBarkod").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
+      V.urunler[kod]=Object.assign({},u,{ad,marka:$("#ue_marka").value.trim(),grup:$("#ue_grup").value,birim:$("#ue_birim").value,net:$("#ue_net").value.trim(),saklama:$("#ue_saklama").value,uretici:$("#ue_uretici").value.trim(),adres:$("#ue_adres").value.trim(),isletme:$("#ue_isletme").value.trim(),mensei:$("#ue_mensei").value.trim(),acilis:$("#ue_acilis").value===""?null:+$("#ue_acilis").value,min:$("#ue_min").value===""?null:+$("#ue_min").value,alerjen:$$("#ue_al button.on").map(x=>x.dataset.a),alerjenElle:true,alerjenOto:false,grupOto:false,icerik:$("#ue_icerik").value.trim(),koliAdet:$("#ue_koliAdet").value===""?null:+$("#ue_koliAdet").value,koliBarkod:$("#ue_koliBarkod").value.trim(),tanimsiz:false,olusturma:u.olusturma||new Date().toISOString()});
       kaydet(); urunListesiGuncelle(); SAYFA.urunler.goster(); if(V.aktifSayim && AKTIF_SEKME==="sayim") syCiz(); toast("Ürün kartı kaydedildi"); }}], true);
   selDoldur($("#ue_grup",b),GRUPLAR,u.grup); selDoldur($("#ue_birim",b),BIRIMLER,u.birim); selDoldur($("#ue_saklama",b),Object.entries(SAKLAMA),u.saklama);
   $("#ue_al",b).onclick=e=>{ const x=e.target.closest("button"); if(x) x.classList.toggle("on"); };
@@ -2740,6 +2758,7 @@ SAYFA.yedek = {
   try{ await DB.ac(); const v=await DB.al("veri"); if(v){ V=Object.assign(bosVeri(),v); V.ayar=Object.assign(bosVeri().ayar,v.ayar||{}); } }
   catch(e){ toast("Veri deposu açılamadı: "+e.message,1); }
   try{ if(gruplariDuzenle()) setTimeout(kaydet,2000); }catch(e){ console.warn(e); }
+  try{ if(alerjenleriTamamla()) setTimeout(kaydet,2500); }catch(e){ console.warn(e); }
   try{ sayimKresAyarla(); }catch(e){ console.warn(e); }
   hesapla(); await senkKur(); kresCiz(); urunListesiGuncelle();
   for(const k in SAYFA) SAYFA[k].ilk && SAYFA[k].ilk();

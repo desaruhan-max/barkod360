@@ -1476,11 +1476,13 @@ class Kamera{
     const c=document.createElement("canvas"); c.width=Math.round(v.videoWidth*s); c.height=Math.round(v.videoHeight*s); c.getContext("2d").drawImage(v,0,0,c.width,c.height); return c; }
   async dongu(){
     const ben=this.akis; let hata=0, sonZaman=-1, donuk=Date.now();
+    // gerçek kare gelişini say (telefonda en güvenilir yol)
+    if(this.v.requestVideoFrameCallback){ this._kareSay=0; const say=()=>{ if(this.akis!==ben) return; this._kareSay++; this.v.requestVideoFrameCallback(say); }; this.v.requestVideoFrameCallback(say); } else this._kareSay=null;
     while(this.calisiyor && this.akis===ben){
       const t0=performance.now();
       this._n=(this._n||0)+1;
       // görüntü donduysa (telefonun kendi kamerası açılıp kapandıktan sonra olur) kamerayı yeniden başlat
-      const tr=this.iz; const ct=this.v.currentTime;
+      const tr=this.iz; const ct=this._kareSay!=null?this._kareSay:this.v.currentTime;
       if(ct!==sonZaman){ sonZaman=ct; donuk=Date.now(); }
       if(!document.hidden && (!tr || tr.readyState!=="live" || Date.now()-donuk>2500)){ this.yenidenBaslat("görüntü dondu"); return; }
       try{ const c=this._n%2?this.orta():this.kare(1280);
@@ -1488,14 +1490,21 @@ class Kamera{
           // okuyucu takılırsa en fazla 3 sn bekle
           const r=await Promise.race([Barkod.oku(id,this._n%3!==0, Barkod.yedek), new Promise((_,j)=>setTimeout(()=>j(new Error("zaman aşımı")),3000))]);
           hata=0; if(r.length) this.sonuc(r); } }
-      catch(e){ console.warn(e); hata++;
+      catch(e){ console.warn(e); this._sonHata=e&&e.message||e; hata++;
         if(hata>=4){ hata=0; Barkod.sifirla(); this.durum("Barkod okuyucu yenilendi · barkodu çerçeveye tutun"); } }
+      this.taniTopla();
       await new Promise(r=>setTimeout(r,Math.max(40,140-(performance.now()-t0))));
     }
   }
-  yenidenBaslat(neden){ if(this._yb && Date.now()-this._yb<4000) return; this._yb=Date.now(); console.warn("kamera yeniden:",neden); this.durum("Kamera yeniden açılıyor…"); setTimeout(()=>{ if(AKTIF_KAMERA===this||!AKTIF_KAMERA) this.ac(); },300); }
+  // tanı: kamera açıkken 45 sn barkod okunmazsa durumu özel depoya yaz (en çok 10 dakikada bir)
+  taniTopla(){ const k=this._tk||(this._tk={bas:Date.now(),son:0,hata:"",yb:0});
+    if(this._sonOkuma) k.bas=Math.max(k.bas,this._sonOkuma);
+    if(Date.now()-k.bas<45000 || Date.now()-k.son<600000 || typeof taniKaydet!=="function") return; k.son=Date.now(); k.bas=Date.now();
+    try{ const v=this.v, tr=this.iz; const st=(tr&&tr.getSettings&&tr.getSettings())||{};
+      const c=this.kare(1280); taniKaydet({t:new Date().toISOString(),olay:"kamera",bilgi:this.bilgi||"",izDurum:tr&&tr.readyState,muted:tr&&tr.muted,video:[v.videoWidth,v.videoHeight,v.readyState,v.paused,Math.round(v.currentTime)],ayar:{w:st.width,h:st.height,zoom:st.zoom,odak:st.focusMode},kare:this._n,sonHata:String(this._sonHata||""),yedek:Barkod.yedek,bd:"BarcodeDetector" in window,yb:this._ybSay||0,bellek:performance.memory?Math.round(performance.memory.usedJSHeapSize/1e6)+"MB":""},c); }catch(e){ console.warn(e); } }
+  yenidenBaslat(neden){ this._ybSay=(this._ybSay||0)+1; if(this._yb && Date.now()-this._yb<4000) return; this._yb=Date.now(); console.warn("kamera yeniden:",neden); this.durum("Kamera yeniden açılıyor…"); setTimeout(()=>{ if(AKTIF_KAMERA===this||!AKTIF_KAMERA) this.ac(); },300); }
   sonuc(liste){
-    const simdi=Date.now(), bekle=this.o.tekrarMs||1600; const yeni=[];
+    this._sonOkuma=Date.now(); const simdi=Date.now(), bekle=this.o.tekrarMs||1600; const yeni=[];
     for(const x of liste){ if(!x.isValid) continue; const k=x.text; if(this.son[k] && simdi-this.son[k]<bekle){ this.son[k]=simdi; continue; } this.son[k]=simdi; yeni.push(barkodCoz(x.text,x.format)); }
     if(!yeni.length) return;
     this.camEl.classList.add("okundu-flas"); setTimeout(()=>this.camEl.classList.remove("okundu-flas"),250);

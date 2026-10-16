@@ -1728,6 +1728,12 @@ async function offBul(kod, ms){
       icerik:(p.ingredients_text_tr||p.ingredients_text||"").replace(/[_*]/g,"").trim(), alerjen:(p.allergens_tags||[]).map(x=>OFF_ALERJEN[x]).filter(Boolean), gorsel:p.image_front_url||p.image_url||""};
   } finally{ clearTimeout(t); }
 }
+// Resmi olmayan ürünlere internetten (Open Food Facts) resim bul; her barkod oturumda bir kez denenir
+const _resimDenendi=new Set();
+async function resimTamamla(barkodlar, sonra){ let n=0;
+  for(const b of barkodlar){ const u=V.urunler[b]; if(!u||u.gorselId||u.fotoId||_resimDenendi.has(b)||!/^\d{8,14}$/.test(b)||/^2\d{12}$/.test(b)) continue; _resimDenendi.add(b);
+    try{ const r=await offBul(b,6000); if(r&&r.gorsel){ const gid=await offGorsel(r.gorsel); if(gid&&V.urunler[b]&&!V.urunler[b].gorselId){ V.urunler[b].gorselId=gid; n++; } } }catch(e){} }
+  if(n){ kaydet(); sonra&&sonra(); } return n; }
 async function offGorsel(url){ if(!url) return null; try{ const b=await fetch(url).then(r=>{ if(!r.ok) throw new Error(r.status); return r.blob(); }); return await gorselKaydet(b); }catch(e){ console.warn("görsel",e); return null; } }
 async function kbInternettenBul(kod){
   if(!kod || !navigator.onLine || !/^\d{8,14}$/.test(kod)) return;
@@ -2455,10 +2461,11 @@ SAYFA.stok = {
   goster(){ kresCiz(); const r=this.veri(); const kap=$("#stKapsam").value;
     if(!r.length){ $("#stTablo").innerHTML='<div class="empty">Gösterilecek stok yok</div>'; return; }
     const top=r.reduce((t,x)=>t+x.deger,0);
-    $("#stTablo").innerHTML=`<div class="tw"><table class="rt"><thead><tr><th>Ürün</th><th>Marka</th><th>Grup</th><th class="r">Miktar</th><th>Birim</th><th class="r">Parti</th><th>En yakın STT/TETT</th><th class="r">Değer</th><th>Durum</th></tr></thead><tbody>
-      ${r.map(x=>{ const az=x.u.min>0&&kap!=="tum"&&x.mik<x.u.min; return `<tr class="tik" data-b="${esc(x.b)}"><td><b>${esc(x.u.ad)}</b><div class="small muted">${esc(x.b)}</div></td><td>${esc(x.u.marka||"")}</td><td class="m">${esc(x.u.grup||"")}</td><td class="r"><b>${nf(x.mik)}</b>${koliMetin(x.u,x.mik)?'<div class="small muted">'+esc(koliMetin(x.u,x.mik))+"</div>":""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.lot}</td><td>${x.skt?trTarih(x.skt)+" "+sktPill(x.skt):""}</td><td class="r">${x.deger?tl(x.deger):""}</td><td>${az?'<span class="pill no">Asgari altı ('+nf(x.u.min)+')</span>':""}${x.bloke?' <span class="pill bad">bloke parti</span>':""}${x.mik<=0?'<span class="pill gh">bitti</span>':""}</td></tr>`; }).join("")}
-      </tbody><tfoot><tr><td colspan="7">Toplam ${r.length} ürün</td><td class="r">${tl(top)}</td><td></td></tr></tfoot></table></div>`;
+    $("#stTablo").innerHTML=`<div class="tw"><table class="rt"><thead><tr><th></th><th>Ürün</th><th>Marka</th><th>Grup</th><th class="r">Miktar</th><th>Birim</th><th class="r">Parti</th><th>En yakın STT/TETT</th><th class="r">Değer</th><th>Durum</th></tr></thead><tbody>
+      ${r.map(x=>{ const az=x.u.min>0&&kap!=="tum"&&x.mik<x.u.min; return `<tr class="tik" data-b="${esc(x.b)}"><td style="width:48px"><img data-g="${esc(x.b)}" alt="" style="width:44px;height:44px;object-fit:contain;background:#fff;border-radius:6px;visibility:hidden"></td><td><b>${esc(x.u.ad)}</b><div class="small muted">${esc(x.b)}</div></td><td>${esc(x.u.marka||"")}</td><td class="m">${esc(x.u.grup||"")}</td><td class="r"><b>${nf(x.mik)}</b>${koliMetin(x.u,x.mik)?'<div class="small muted">'+esc(koliMetin(x.u,x.mik))+"</div>":""}</td><td>${esc(x.u.birim)}</td><td class="r">${x.lot}</td><td>${x.skt?trTarih(x.skt)+" "+sktPill(x.skt):""}</td><td class="r">${x.deger?tl(x.deger):""}</td><td>${az?'<span class="pill no">Asgari altı ('+nf(x.u.min)+')</span>':""}${x.bloke?' <span class="pill bad">bloke parti</span>':""}${x.mik<=0?'<span class="pill gh">bitti</span>':""}</td></tr>`; }).join("")}
+      </tbody><tfoot><tr><td colspan="8">Toplam ${r.length} ürün</td><td class="r">${tl(top)}</td><td></td></tr></tfoot></table></div>`;
     $$("#stTablo tr[data-b]").forEach(t=>t.onclick=()=>urunDetay(t.dataset.b, kap==="tum"?null:aktifKres()));
+    gorselYukle($("#stTablo")); resimTamamla(r.map(x=>x.b),()=>{ if(AKTIF_SEKME==="stok") gorselYukle($("#stTablo")); });
   },
   csv(){ // Excel: kategori yok; ürünler sayımda okutulduğu sıraya göre (en son sayım önce), hiç sayılmayanlar en sonda
     const tum=$("#stKapsam").value==="tum"; const kres=tum?null:aktifKres(); const r=this.veri();
@@ -2494,6 +2501,8 @@ function urunDetay(barkod, kres){
     <div class="tw"><table class="rt"><thead><tr><th>Kreş</th><th>Lot</th><th>Üretim</th><th>STT/TETT</th><th>Giriş</th><th>Tedarikçi</th><th class="r">Kalan</th><th class="r">Fiyat</th><th></th></tr></thead><tbody>
     ${ls.map(l=>`<tr><td>${esc(KISA[l.kres])}</td><td><b>${esc(l.lot||"—")}</b>${l.bloke?' <span class="pill bad">BLOKE</span>':""}${l.red?' <span class="pill bad">RED</span>':""}</td><td class="m">${trTarih(l.ut)} ${esc(l.us||"")}</td><td>${l.sktTur||""} ${trTarih(l.skt)} ${sktPill(l.skt)}</td><td class="m">${trTarih(l.girisTarihi)}</td><td class="m">${esc(l.ted||"")}</td><td class="r"><b>${nf(kalanOf(l.id))}</b> ${esc(u.birim)}</td><td class="r">${l.fiyat!=null?nf(l.fiyat):""}</td>
       <td class="act">${l.red?"":`<button class="btn sm" data-say="${l.id}">Sayım düzelt</button> <button class="btn sm" data-blk="${l.id}">${l.bloke?"Blokeyi kaldır":"Bloke et"}</button>`} ${(l.fotoIds||[]).length?`<button class="ib" data-foto="${l.id}" title="Etiket fotoğrafı">📷</button>`:""}</td></tr>`).join("")||'<tr><td colspan="9" class="m">Stok yok</td></tr>'}</tbody></table></div>`,[{t:"Kapat"},{t:"Bilgileri düzenle",c:"primary",f:()=>{ setTimeout(()=>urunDuzenle(barkod),30); }}],true);
+  if(!u.gorselId&&!u.fotoId){ const im=$("img[data-g]",b); const yer=document.createElement("div"); yer.className="small muted"; yer.style.cssText="width:120px;text-align:center"; yer.textContent=navigator.onLine?"Resim internette aranıyor…":"Resim yok"; if(im){ im.style.display="none"; im.after(yer); }
+    resimTamamla([barkod]).then(n=>{ if(n){ yer.remove(); if(im) im.style.display=""; gorselYukle(b); } else yer.innerHTML="Resim yok.<br>📷 Görsel çek ile ekleyin"; }); }
   gorselYukle(b); const gy=async kam=>{ if(await urunGorselDegistir(barkod,kam)){ gorselYukle(b); if(AKTIF_SEKME==="urunler") SAYFA.urunler.goster(); } };
   $("#udCek",b).onclick=()=>gy(true); $("#udGal",b).onclick=()=>gy(false);
   $$("[data-say]",b).forEach(x=>x.onclick=()=>lotSayimDuzelt(x.dataset.say,()=>urunDetay(barkod,kres)));

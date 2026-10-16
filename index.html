@@ -2533,7 +2533,9 @@ SAYFA.stok = {
   veri(){ const kap=$("#stKapsam").value, m=stokSatirlari(kap), ara=katla($("#stAra").value), g=$("#stGrup").value, sifir=$("#stSifir").checked;
     let r=Object.values(V.urunler).map(u=>Object.assign({u},m[u.barkod]||{b:u.barkod,mik:0,deger:0,lot:0,skt:null,bloke:0}));
     if(!sifir) r=r.filter(x=>x.mik>0); if(g) r=r.filter(x=>x.u.grup===g); if(ara) r=r.filter(x=>katla(x.u.ad+" "+(x.u.marka||"")+" "+x.b+" "+(x.u.uretici||"")).includes(ara));
-    return r.sort((a,b)=>(a.u.grup||"").localeCompare(b.u.grup||"","tr")||a.u.ad.localeCompare(b.u.ad,"tr")); },
+    // sayımda okutulma sırası (en son sayım), sayılmayanlar en sonda ada göre
+    const kr=$("#stKapsam")&&$("#stKapsam").value==="tum"?null:aktifKres(); const sira=sayimSirasi(kr); const sr=b=>sira.has(b)?sira.get(b):1e9;
+    return r.sort((a,b)=>sr(a.b)-sr(b.b)||a.u.ad.localeCompare(b.u.ad,"tr")); },
   goster(){ kresCiz(); const r=this.veri(); const kap=$("#stKapsam").value;
     if(!r.length){ $("#stTablo").innerHTML='<div class="empty">Gösterilecek stok yok</div>'; return; }
     const top=r.reduce((t,x)=>t+x.deger,0);

@@ -1237,6 +1237,14 @@ Açıklama yazma, düşünceni yazma; YALNIZ şu JSON'u yaz: {"stt":null,"tett":
       return {skt, sktTur:t(j.stt)?"STT":(t(j.tett)?"TETT":""), ut, us, lot:(typeof j.parti==="string"||typeof j.parti==="number")?String(j.parti).trim().slice(0,30):""};
     } finally{ clearTimeout(sure); }
   },
+  // Barkodun çizgileri bozuk basılmışsa altındaki rakamları oku; kontrol hanesi tutmazsa kabul etme
+  async barkodRakam(canvas){
+    const k=Math.min(1,1600/Math.max(canvas.width,canvas.height)); const c=document.createElement("canvas"); c.width=Math.round(canvas.width*k); c.height=Math.round(canvas.height*k); c.getContext("2d").drawImage(canvas,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.9));
+    const istem='Bu fotoğrafta bir ürün barkodu var. Barkod çizgilerinin hemen altında yazan rakamları (EAN-13 genelde 13 hane, 869 ile başlar) soldan sağa aynen oku. Tahmin etme; okuyamadığın rakam varsa null yaz. Açıklama yazma, YALNIZ şu JSON: {"barkod":null}';
+    const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),25000);
+    try{ const j=ARTIFACT? await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal}) : await this.api(istem,blob,ctl.signal);
+      const v=String(j&&j.barkod||"").replace(/\D/g,""); return gtinGecerli(v)?v:""; } finally{ clearTimeout(sure); } },
   // Barkodsuz ürün: fotoğraftaki gıdanın kısa adını söyle (kavanozdaki kuru üzüm, bulgur vb.)
   async gidaAdi(canvas){
     const k=Math.min(1,1000/Math.max(canvas.width,canvas.height)); const c=document.createElement("canvas"); c.width=Math.round(canvas.width*k); c.height=Math.round(canvas.height*k); c.getContext("2d").drawImage(canvas,0,0,c.width,c.height);
@@ -1488,7 +1496,9 @@ class Kamera{
       try{ const c=this._n%2?this.orta():this.kare(1280);
         if(c){ const id=c.getContext("2d").getImageData(0,0,c.width,c.height);
           // okuyucu takılırsa en fazla 3 sn bekle
-          const r=await Promise.race([Barkod.oku(id,this._n%3!==0, Barkod.yedek), new Promise((_,j)=>setTimeout(()=>j(new Error("zaman aşımı")),3000))]);
+          // telefonun kendi okuyucusu (Google) varsa her iki karede bir onu kullan: kötü basılmış barkodları daha iyi okur
+          const yerliSira=("BarcodeDetector" in window) && this._n%2===0;
+          const r=await Promise.race([yerliSira? Barkod.yerli(c).catch(()=>Barkod.oku(id,true)) : Barkod.oku(id,this._n%3!==0, Barkod.yedek), new Promise((_,j)=>setTimeout(()=>j(new Error("zaman aşımı")),3000))]);
           hata=0; if(r.length) this.sonuc(r); } }
       catch(e){ console.warn(e); this._sonHata=e&&e.message||e; hata++;
         if(hata>=4){ hata=0; Barkod.sifirla(); this.durum("Barkod okuyucu yenilendi · barkodu çerçeveye tutun"); } }
@@ -1521,8 +1531,13 @@ class Kamera{
     URL.revokeObjectURL(img.src);
     const yuk=$(".fotoCek span",this.kap); if(yuk) yuk.textContent="⏳ Okunuyor…";
     try{ let src=c; if(Math.max(c.width,c.height)>2400){ const s=2400/Math.max(c.width,c.height); src=document.createElement("canvas"); src.width=Math.round(c.width*s); src.height=Math.round(c.height*s); src.getContext("2d").drawImage(c,0,0,src.width,src.height); }
-      const r=await Barkod.oku(src.getContext("2d").getImageData(0,0,src.width,src.height)); const tekil={}; const g=r.filter(x=>x.isValid!==false).filter(x=>!tekil[x.text]&&(tekil[x.text]=1)).map(x=>barkodCoz(x.text,x.format));
-      if(g.length) await this.bildir(g,true); else if(!this.o.onFoto){ bip(false); toast("Fotoğrafta barkod bulunamadı. Barkoda daha yakından, net çekin.",1); } }
+      let r=await Barkod.oku(src.getContext("2d").getImageData(0,0,src.width,src.height));
+      if(!r.filter(x=>x.isValid!==false).length && ("BarcodeDetector" in window)){ try{ r=await Barkod.yerli(c); }catch(e){} } // Google okuyucusu
+      const tekil={}; let g=r.filter(x=>x.isValid!==false).filter(x=>!tekil[x.text]&&(tekil[x.text]=1)).map(x=>barkodCoz(x.text,x.format));
+      if(!g.length && !this.o.onFoto && await ClaudeOkur.kullanilabilir()){ // çizgiler bozuksa altındaki rakamları Claude okusun
+        if(yuk) yuk.textContent="⏳ Rakamlar okunuyor…";
+        try{ const kod=await ClaudeOkur.barkodRakam(c); if(kod) g=[barkodCoz(kod,"Rakam")]; }catch(e){ console.warn(e); } }
+      if(g.length) await this.bildir(g,true); else if(!this.o.onFoto){ bip(false); toast("Fotoğrafta barkod bulunamadı. Barkodun altındaki rakamlar görünecek şekilde yakından çekin ya da ⌨ Barkod gir.",1); } }
     catch(e){ toast("Barkod okunamadı: "+e.message,1); }
     finally{ if(yuk) yuk.textContent=this.o.fotoMetin||"📸 Fotoğraf çek"; }
     if(this.o.onFoto) this.o.onFoto(c);

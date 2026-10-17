@@ -2900,8 +2900,9 @@ SAYFA.sevk = {
     const stok=u?stokOf(u.barkod,n):0; const bugunMu=tr===bugun();
     $("#sv_urunBilgi").textContent=u?("Barkod "+u.barkod+" · "+n+" stoğu: "+nf(stok)+" "+(u.birim||"")):"";
     if(u&&u.birim&&!this._birimElle) $("#sv_birim").value=[...$("#sv_birim").options].some(o=>o.value===u.birim)?u.birim:$("#sv_birim").value;
-    const c=$("#sv_stok"); c.disabled=false; if(!this._stokElle) c.checked=!!u&&stok>0&&bugunMu;
-    $("#sv_stokBilgi").textContent="İşaretliyse ürün gönderen kreşin stoğundan düşer, alan kreşin stoğuna eklenir"+(tr&&!bugunMu?" (sevk tarihiyle)":"")+". İşaretli değilse yalnız kayıt tutulur."+(!u&&$("#sv_urun").value.trim()?" Stoğa işlemek için ürünü listeden seçin.":(u&&stok<=0?" Gönderen kreşte bu ürünün stoğu yok.":"")); },
+    const eng=tr?this.sayimEngel({t:tr,nereden:n,nereye:$("#sv_nereye").value}):"";
+    const c=$("#sv_stok"); c.disabled=false; if(!this._stokElle) c.checked=!!u&&stok>0&&bugunMu&&!eng;
+    $("#sv_stokBilgi").textContent="İşaretliyse ürün gönderen kreşin stoğundan düşer, alan kreşin stoğuna eklenir"+(tr&&!bugunMu?" (sevk tarihiyle)":"")+". İşaretli değilse yalnız kayıt tutulur."+(eng?" ⚠ "+eng:(!u&&$("#sv_urun").value.trim()?" Stoğa işlemek için ürünü listeden seçin.":(u&&stok<=0?" Gönderen kreşte bu ürünün stoğu yok.":""))); },
   // ürün arama: Türkçe harf farkı gözetmez, kelimenin her yerinde arar, birden çok kelimeyi birlikte arar (örn. "sut", "yogurt", "uht sut")
   oneri(){ const q=katla($("#sv_urun").value).trim(); const e=$("#sv_oneri"); if(!q){ e.innerHTML=""; return; }
     const kel=q.split(/\s+/).filter(Boolean); const n=$("#sv_nereden").value;
@@ -2917,7 +2918,7 @@ SAYFA.sevk = {
       $("#sv_nereden").innerHTML=op; $("#sv_nereye").innerHTML=op; $("#sv_filtre").innerHTML='<option value="">Tüm kreşler</option>'+op;
       $("#sv_tarih").value=trTarih(bugun()); tarihMaske($("#sv_tarih"));
       $("#sv_urun").addEventListener("input",()=>this.oneri()); $("#sv_urun").addEventListener("focus",()=>this.oneri());
-      ["sv_urun","sv_nereden","sv_tarih"].forEach(id=>{ $("#"+id).addEventListener("input",()=>this.durum()); $("#"+id).addEventListener("change",()=>this.durum()); });
+      ["sv_urun","sv_nereden","sv_nereye","sv_tarih"].forEach(id=>{ $("#"+id).addEventListener("input",()=>this.durum()); $("#"+id).addEventListener("change",()=>this.durum()); });
       $("#sv_birim").onchange=()=>{ this._birimElle=true; }; $("#sv_stok").onchange=()=>{ this._stokElle=true; };
       $("#sv_kaydet").onclick=()=>this.kaydet(); $("#sv_filtre").onchange=()=>this.liste(); $("#svExcel").onclick=()=>this.excel(); }
     $("#sv_nereden").value=aktifKres(); if($("#sv_nereye").value===aktifKres()) $("#sv_nereye").value=KRESLER.find(k=>k!==aktifKres());
@@ -2933,7 +2934,11 @@ SAYFA.sevk = {
     (V.sevkler=V.sevkler||[]).push(sv); kaydet(); bip(); toast("Sevk kaydedildi: "+sv.ad+" · "+nf(m)+" "+birim+" · "+KISA[n]+" → "+KISA[h]+(sv.stok?" (stoğa işlendi)":" (kayıt)"));
     $("#sv_urun").value=""; this._secili=null; $("#sv_oneri").innerHTML=""; $("#sv_miktar").value=""; $("#sv_ack").value=""; this._birimElle=false; this._stokElle=false; this.durum(); this.liste(); },
   // sevki stoğa işle: gönderenden FEFO ile düş, alana aynı parti ile ekle. Hata varsa metin döner.
+  // sevk tarihinden SONRA yapılmış sayım varsa sevk o sayıma zaten yansımıştır: stoğa işlenirse iki kez sayılır
+  sonSayim(kres){ return (V.sayimlar||[]).filter(x=>x.kres===kres&&!x.yalnizKayit).map(x=>(x.bit||"").slice(0,10)).sort().pop()||""; },
+  sayimEngel(sv){ for(const k of [sv.nereden,sv.nereye]){ const ss=this.sonSayim(k); if(ss&&ss>=sv.t) return k+" kreşinin "+trTarih(ss)+" sayımı bu sevkten sonra yapılmış; sevk o sayıma zaten yansımış. Stoğa işlenirse iki kez sayılır, bu yüzden yalnız kayıt olarak tutulur."; } return ""; },
   stokla(sv){ const u=sv.barkod&&V.urunler[sv.barkod]; if(!u) return "Stoğa işlemek için ürünü listeden seçin (kayıtlı ürün olmalı).";
+    const eng=this.sayimEngel(sv); if(eng) return eng;
     const ls=fefoSirala(lotlarOf(u.barkod,sv.nereden)).filter(l=>!l.bloke&&kalanOf(l.id)>0); const top=ls.reduce((a,l)=>a+kalanOf(l.id),0);
     if(top+1e-9<sv.miktar) return KISA[sv.nereden]+" stoğunda yeterli "+u.ad+" yok (stok: "+nf(top)+" "+(u.birim||"")+")";
     const t=sv.t===bugun()?new Date().toISOString():sv.t+"T09:00:00.000Z"; let kalan=sv.miktar; const grup=uid("g");
@@ -2967,10 +2972,10 @@ SAYFA.sevk = {
     for(const x of V.hareketler) if(x.tur==="TRANSFER_CIKIS"&&!x.sevkId&&!x.tersId){ const u=V.urunler[x.barkod]||{}; r.push({id:"h"+x.id,t:x.t.slice(0,10),nereden:x.kres,nereye:x.hedef||"",barkod:x.barkod,ad:u.ad||x.barkod,marka:u.marka||"",miktar:-x.miktar,birim:u.birim||"",ack:x.ack||"",stok:true,eski:true}); }
     return r.filter(x=>!f||x.nereden===f||x.nereye===f).sort((a,b)=>(b.t||"").localeCompare(a.t||"")||(b.kayit||"").localeCompare(a.kayit||"")); },
   liste(){ const r=this.veri();
-    $("#sv_liste").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Nereden → Nereye</th><th>Ürün</th><th class="r">Miktar</th><th></th></tr></thead><tbody>${r.map(x=>`<tr><td class="m">${trTarih(x.t)}</td><td><b>${esc(KISA[x.nereden]||x.nereden)}</b> → <b>${esc(KISA[x.nereye]||x.nereye)}</b></td><td>${esc(x.ad)}${x.marka?' <span class="muted">· '+esc(x.marka)+"</span>":""}${x.ack?'<div class="small muted">'+esc(x.ack)+"</div>":""}</td><td class="r"><b>${nf(x.miktar)}</b> ${esc(x.birim)}<div>${x.stok?'<span class="pill ok">✓ stoğa işlendi</span>':'<span class="pill no">yalnız kayıt · stoğa işlenmedi</span>'}</div></td><td class="act">${!x.eski?`<button class="btn sm" data-svduz="${x.id}">✎ Düzelt</button>`:""}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Henüz sevk yok</div>';
+    $("#sv_liste").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Nereden → Nereye</th><th>Ürün</th><th class="r">Miktar</th><th></th></tr></thead><tbody>${r.map(x=>`<tr><td class="m">${trTarih(x.t)}</td><td><b>${esc(KISA[x.nereden]||x.nereden)}</b> → <b>${esc(KISA[x.nereye]||x.nereye)}</b></td><td>${esc(x.ad)}${x.marka?' <span class="muted">· '+esc(x.marka)+"</span>":""}${x.ack?'<div class="small muted">'+esc(x.ack)+"</div>":""}</td><td class="r"><b>${nf(x.miktar)}</b> ${esc(x.birim)}<div>${x.stok?'<span class="pill ok">✓ stoğa işlendi</span>':'<span class="pill no">geçmiş sevk (kayıt)</span>'}</div></td><td class="act">${!x.eski?`<button class="btn sm" data-svduz="${x.id}">✎ Düzelt</button>`:""}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Henüz sevk yok</div>';
     $$("[data-svduz]").forEach(b=>b.onclick=()=>this.duzelt(b.dataset.svduz)); },
   excel(){ const r=this.veri(); const H=["Sevk tarihi","Nereden","Nereye","Ürün","Marka","Barkod","Miktar","Birim","Açıklama","Durum"];
-    const rows=[[{v:"Sevkler (kreşler arası) · "+trTarih(bugun()),s:XLSX_STIL.ust}],[],H.map(v=>({v,s:XLSX_STIL.baslik})),...r.map(x=>[x.t?{v:tarihNesne(x.t),s:XLSX_STIL.tarih}:"",x.nereden,x.nereye,x.ad,x.marka||"",x.barkod||"",x.miktar,x.birim,x.ack||"",x.stok?"Stoğa işlendi":"Kayıt"])];
+    const rows=[[{v:"Sevkler (kreşler arası) · "+trTarih(bugun()),s:XLSX_STIL.ust}],[],H.map(v=>({v,s:XLSX_STIL.baslik})),...r.map(x=>[x.t?{v:tarihNesne(x.t),s:XLSX_STIL.tarih}:"",x.nereden,x.nereye,x.ad,x.marka||"",x.barkod||"",x.miktar,x.birim,x.ack||"",x.stok?"Stoğa işlendi":"Geçmiş sevk (kayıt)"])];
     indir("sevkler "+trTarih(bugun())+".xlsx",xlsxOlustur([{ad:"Sevkler",sutunlar:[12,22,22,34,16,16,9,8,30,14],satirlar:rows,donuk:3}])); toast("Excel dosyası indirildi (İndirilenler)"); }
 };
 

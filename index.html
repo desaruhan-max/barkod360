@@ -2901,7 +2901,7 @@ SAYFA.sevk = {
     $("#sv_urunBilgi").textContent=u?("Barkod "+u.barkod+" · "+n+" stoğu: "+nf(stok)+" "+(u.birim||"")):"";
     if(u&&u.birim&&!this._birimElle) $("#sv_birim").value=[...$("#sv_birim").options].some(o=>o.value===u.birim)?u.birim:$("#sv_birim").value;
     const eng=tr?this.sayimEngel({t:tr,nereden:n,nereye:$("#sv_nereye").value}):"";
-    const c=$("#sv_stok"); c.disabled=false; if(!this._stokElle) c.checked=!!u&&stok>0&&bugunMu&&!eng;
+    const c=$("#sv_stok"); c.disabled=false; if(!this._stokElle) c.checked=true; // hep işaretli; işlenemiyorsa kaydederken uyarı penceresi çıkar
     $("#sv_stokBilgi").textContent="İşaretliyse ürün gönderen kreşin stoğundan düşer, alan kreşin stoğuna eklenir"+(tr&&!bugunMu?" (sevk tarihiyle)":"")+". İşaretli değilse yalnız kayıt tutulur."+(eng?" ⚠ "+eng:(!u&&$("#sv_urun").value.trim()?" Stoğa işlemek için ürünü listeden seçin.":(u&&stok<=0?" Gönderen kreşte bu ürünün stoğu yok.":""))); },
   // ürün arama: Türkçe harf farkı gözetmez, kelimenin her yerinde arar, birden çok kelimeyi birlikte arar (örn. "sut", "yogurt", "uht sut")
   oneri(){ const q=katla($("#sv_urun").value).trim(); const e=$("#sv_oneri"); if(!q){ e.innerHTML=""; return; }
@@ -2932,7 +2932,7 @@ SAYFA.sevk = {
     const sv={id:uid("v"),t,nereden:n,nereye:h,barkod:u?u.barkod:"",ad:u?u.ad:metin,marka:u?(u.marka||""):"",miktar:m,birim,ack:$("#sv_ack").value.trim(),stok:false,kayit:new Date().toISOString()};
     if(stokla){ const hata=this.stokla(sv); if(hata){
         dlg("Sevk stoğa işlenemedi",`<p>${esc(hata)}</p><p class="hint">Sevki stoğa işlemeden, yalnız kayıt olarak kaydedebilirsiniz.</p>`,
-          [{t:"Vazgeç"},{t:"Kayıt olarak kaydet",c:"primary",f:()=>{ (V.sevkler=V.sevkler||[]).push(sv); kaydet(); toast("Sevk kayıt olarak kaydedildi",0,6000); $("#sv_urun").value=""; this._secili=null; $("#sv_oneri").innerHTML=""; $("#sv_miktar").value=""; $("#sv_ack").value=""; this._birimElle=false; this._stokElle=false; this.durum(); this.liste(); }}]);
+          [{t:"Vazgeç",f:()=>{ this.temizle(); toast("Sevk kaydedilmedi"); }},{t:"Kayıt olarak kaydet",c:"primary",f:()=>{ (V.sevkler=V.sevkler||[]).push(sv); kaydet(); toast("Sevk kayıt olarak kaydedildi",0,6000); this.temizle(); this.liste(); }}]);
         return; } }
     (V.sevkler=V.sevkler||[]).push(sv); kaydet(); bip(); toast("Sevk kaydedildi: "+sv.ad+" · "+nf(m)+" "+birim+" · "+KISA[n]+" → "+KISA[h]+(sv.stok?" (stoğa işlendi)":" (kayıt)"),0,6000);
     $("#sv_urun").value=""; this._secili=null; $("#sv_oneri").innerHTML=""; $("#sv_miktar").value=""; $("#sv_ack").value=""; this._birimElle=false; this._stokElle=false; this.durum(); this.liste(); },
@@ -2950,6 +2950,7 @@ SAYFA.sevk = {
       let yl=Object.values(V.lotlar).find(x=>x.kaynakLotId===l.id&&x.kres===sv.nereye); if(!yl){ yl=Object.assign({},l,{id:uid("l"),kres:sv.nereye,kaynakLotId:l.id,girisTarihi:sv.t,not:"Sevk: "+sv.nereden}); V.lotlar[yl.id]=yl; }
       hareketEkle({t,tur:"TRANSFER_GIRIS",kres:sv.nereye,barkod:u.barkod,lotId:yl.id,miktar:al,fiyat:l.fiyat,ack:"Sevk ← "+sv.nereden+(sv.ack?" "+sv.ack:""),grup,sevkId:sv.id}); }
     sv.stok=true; sv.grup=grup; return ""; },
+  temizle(){ $("#sv_urun").value=""; this._secili=null; $("#sv_oneri").innerHTML=""; $("#sv_miktar").value=""; $("#sv_ack").value=""; this._birimElle=false; this._stokElle=false; this.durum(); },
   geriAl(sv){ V.hareketler=V.hareketler.filter(x=>x.sevkId!==sv.id); sv.stok=false; delete sv.grup; },
   duzelt(id){ const sv=(V.sevkler||[]).find(x=>x.id===id); if(!sv) return; const op=k=>KRESLER.map(x=>`<option${x===k?" selected":""}>${esc(x)}</option>`).join("");
     const b=dlg("Sevki düzelt",`<label class="f">Sevk tarihi<input id="sd_t" inputmode="numeric" value="${trTarih(sv.t)}" style="font-size:16px"></label>

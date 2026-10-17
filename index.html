@@ -2950,7 +2950,7 @@ SAYFA.sevk = {
       let yl=Object.values(V.lotlar).find(x=>x.kaynakLotId===l.id&&x.kres===sv.nereye); if(!yl){ yl=Object.assign({},l,{id:uid("l"),kres:sv.nereye,kaynakLotId:l.id,girisTarihi:sv.t,not:"Sevk: "+sv.nereden}); V.lotlar[yl.id]=yl; }
       hareketEkle({t,tur:"TRANSFER_GIRIS",kres:sv.nereye,barkod:u.barkod,lotId:yl.id,miktar:al,fiyat:l.fiyat,ack:"Sevk ← "+sv.nereden+(sv.ack?" "+sv.ack:""),grup,sevkId:sv.id}); }
     sv.stok=true; sv.grup=grup; return ""; },
-  temizle(){ $("#sv_urun").value=""; this._secili=null; $("#sv_oneri").innerHTML=""; $("#sv_miktar").value=""; $("#sv_ack").value=""; this._birimElle=false; this._stokElle=false; this.durum(); },
+  temizle(){ $("#sv_tarih").value=trTarih(bugun()); $("#sv_urun").value=""; this._secili=null; $("#sv_oneri").innerHTML=""; $("#sv_miktar").value=""; $("#sv_ack").value=""; this._birimElle=false; this._stokElle=false; this.durum(); },
   geriAl(sv){ V.hareketler=V.hareketler.filter(x=>x.sevkId!==sv.id); sv.stok=false; delete sv.grup; },
   duzelt(id){ const sv=(V.sevkler||[]).find(x=>x.id===id); if(!sv) return; const op=k=>KRESLER.map(x=>`<option${x===k?" selected":""}>${esc(x)}</option>`).join("");
     const b=dlg("Sevki düzelt",`<label class="f">Sevk tarihi<input id="sd_t" inputmode="numeric" value="${trTarih(sv.t)}" style="font-size:16px"></label>
@@ -2971,7 +2971,11 @@ SAYFA.sevk = {
         Object.assign(sv,{t,nereden:n,nereye:h,miktar:m,birim:$("#sd_b").value,ack:$("#sd_a").value.trim(),barkod:u?u.barkod:"",ad:u?u.ad:metin,marka:u?(u.marka||""):""});
         if($("#sd_s").checked){ const hata=this.stokla(sv); if(hata){ Object.assign(sv,eski); V.hareketler.push(...eskiH); V.hareketler.sort((a,b)=>a.t.localeCompare(b.t)); const h2=$("#sd_hata",b); if(h2){ h2.textContent="⚠ "+hata; h2.style.display="block"; } return false; } }
         kaydet(); this.liste(); this.durum(); toast("Sevk düzeltildi"); }}]);
-    tarihMaske($("#sd_t",b)); },
+    tarihMaske($("#sd_t",b));
+    // uyarıyı pencere açılır açılmaz ve tarih/kreş değişince göster
+    const uyar=()=>{ const d=$("#sd_t",b).value.replace(/\D/g,""); const t=d.length===8?tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)):null; const e=$("#sd_hata",b); if(!e) return;
+      const eng=t?this.sayimEngel({t,nereden:$("#sd_n",b).value,nereye:$("#sd_h",b).value}):""; e.textContent=eng?"⚠ "+eng:""; e.style.display=eng?"block":"none"; };
+    ["sd_t","sd_n","sd_h"].forEach(id=>{ const x=$("#"+id,b); x.addEventListener("input",uyar); x.addEventListener("change",uyar); }); uyar(); },
   veri(){ const f=$("#sv_filtre").value; const r=(V.sevkler||[]).slice();
     // programdan önce Stoktan Çıkış'tan yapılan transferler de listede görünsün
     for(const x of V.hareketler) if(x.tur==="TRANSFER_CIKIS"&&!x.sevkId&&!x.tersId){ const u=V.urunler[x.barkod]||{}; r.push({id:"h"+x.id,t:x.t.slice(0,10),nereden:x.kres,nereye:x.hedef||"",barkod:x.barkod,ad:u.ad||x.barkod,marka:u.marka||"",miktar:-x.miktar,birim:u.birim||"",ack:x.ack||"",stok:true,eski:true}); }

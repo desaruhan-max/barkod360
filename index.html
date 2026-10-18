@@ -673,8 +673,8 @@ function xlsxSktRenk(skt){ if(!skt) return {ad:"tarih yok",s:0,t:XLSX_STIL.tarih
   if(g<=7) return {ad:g+" gün kaldı",s:XLSX_STIL.turuncu,t:XLSX_STIL.tarihTuruncu}; if(g<=30) return {ad:g+" gün",s:XLSX_STIL.turuncu,t:XLSX_STIL.tarihTuruncu}; return {ad:g+" gün",s:XLSX_STIL.yesil,t:XLSX_STIL.tarihYesil}; }
 // Alerjen kuralı: kartta alerjen yoksa ürünün adından ve içindekilerden bulunur (TGK 14 alerjen)
 const ALERJEN_KURAL=[
-  ["Gluten",/\b(UN|UNU|IRMIK|SEHRIYE|ERISTE|MAKARNA|BULGUR|BUGDAY|ARPA|CAVDAR|YULAF|GALETA|BISKUVI|EKMEK|YUFKA|KUSKUS|SIMIT|GOFRET|KEK|POGACA|LAVAS|NISASTA|KADAYIF|MANTI|GLUTEN)\b/, /\b(PIRINC|MISIR|NOHUT|PATATES|MERCIMEK|KESTANE|BADEM|HINDISTAN)\s+(UNU|NISASTASI|UN)\b|GLUTENSIZ/],
-  ["Süt (laktoz)",/\b(SUT|SUTU|SUTLU|YOGURT|PEYNIR|PEYNIRI|KASAR|KASARI|TEREYAG|TEREYAGI|TEREYAGLI|KAYMAK|AYRAN|KREMA|LABNE|LOR|KEFIR|LAKTOZ|PEYNIRALTI|SUT TOZU)\b/, /HINDISTAN CEVIZI SUTU|LAKTOZSUZ|BADEM SUTU|SOYA SUTU|YULAF SUTU/],
+  ["Gluten",/\b(UN|UNU|IRMIK|SEHRIYE|ERISTE|MAKARNA|BULGUR|BUGDAY|ARPA|CAVDAR|YULAF|GALETA|BISKUVI|BISKUVISI|EKMEK|EKMEGI|YUFKA|YUFKASI|KUSKUS|SIMIT|GOFRET|KEK|POGACA|LAVAS|NISASTA|KADAYIF|MANTI|GLUTEN|TARHANA|PETIBOR|POTIBOR|KRAKER)\b/, /\b(PIRINC|MISIR|NOHUT|PATATES|MERCIMEK|KESTANE|BADEM|HINDISTAN)\s+(UNU|NISASTASI|UN)\b|GLUTENSIZ/],
+  ["Süt (laktoz)",/\b(SUT|SUTU|SUTLU|YOGURT|YOGURTLU|PEYNIR|PEYNIRI|KASAR|KASARI|TEREYAG|TEREYAGI|TEREYAGLI|KAYMAK|AYRAN|KREMA|KREMASI|LABNE|LOR|KEFIR|LAKTOZ|PEYNIRALTI|SUT TOZU|TARHANA)\b/, /HINDISTAN CEVIZI SUTU|LAKTOZSUZ|BADEM SUTU|SOYA SUTU|YULAF SUTU/],
   ["Yumurta",/\bYUMURTA/],
   ["Sert kabuklu meyveler",/\b(FINDIK|FINDIGI|CEVIZ|CEVIZI|BADEM|BADEMI|ANTEP FISTIG|FISTIK ICI|KAJU|PEKAN|MAKADAMYA)/, /HINDISTAN CEVIZ|YER FISTIG/],
   ["Yer fıstığı",/\bYER FISTIG|FISTIK EZMESI/],
@@ -689,9 +689,10 @@ function alerjenTahmin(u){ if(!u) return []; const t=" "+katla((u.ad||"")+" "+(u
   return o; }
 // kartında alerjen yazmayan ürünlere kuraldan alerjen yaz (elle düzenlenmiş kartlara dokunulmaz)
 function alerjenleriTamamla(){ let n=0; for(const b in V.urunler){ const u=V.urunler[b]; if(!u||u.alerjenElle||u.tanimsiz||(u.alerjen||[]).length) continue; const a=alerjenTahmin(u); if(a.length){ u.alerjen=a; u.alerjenOto=true; n++; } } return n; }
-// ürünün alerjenleri (kart bilgisinden)
-function alerjenMetin(b){ const u=V.urunler[b]; const a=(u&&u.alerjen||[]).filter(Boolean); return a.join(", "); }
-function alerjenHucre(b){ const t=alerjenMetin(b); return t?{v:"Alerjenler: "+t,s:XLSX_STIL.turuncu}:""; }
+// ürünün alerjenleri: kartta yazılıysa karttan; kart yoksa ya da boşsa (elle boş bırakılmadıysa) ürünün adından
+function alerjenListe(b,ad){ const u=b&&V.urunler[b]; let a=(u&&u.alerjen||[]).filter(Boolean); if(!a.length&&!(u&&u.alerjenElle)) a=alerjenTahmin({ad:ad||(u&&u.ad)||"",icerik:u&&u.icerik||""}); return a; }
+function alerjenMetin(b,ad){ return alerjenListe(b,ad).join(", "); }
+function alerjenHucre(b,ad){ const t=alerjenMetin(b,ad); return t?{v:"Alerjenler: "+t,s:XLSX_STIL.turuncu}:""; }
 // programdaki "En yakın STT/TETT" görünümü: tarih + kalın renkli "6 gün kaldı"
 function xlsxSktHucre(skt){ if(!skt) return ""; const r=xlsxSktRenk(skt); const renk={[XLSX_STIL.kirmizi]:"FFC0453A",[XLSX_STIL.turuncu]:"FFA8701F",[XLSX_STIL.yesil]:"FF1B6B52"}[r.s]||"FF000000";
   return {v:"x",s:r.s,zengin:[{t:trTarih(skt)+"   "},{t:r.ad,b:1,renk}]}; }
@@ -2551,7 +2552,7 @@ async function syTutanakExcel(k,satir,resimli){
   const H=["Sıra",...(resimli?["Resim"]:[]),"Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","Alerjenler","STT/TETT dağılımı","En yakın STT/TETT","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
   const rows=[[{v:"STOK SAYIM TUTANAĞI · "+k.kres+" · "+trTarihSaat(k.bit)+(k.sayan?" · Sayan: "+k.sayan:""),s:XLSX_STIL.ust}],xlsxRenkAciklama(),H.map(v=>({v,s:XLSX_STIL.baslik}))];
   satir.forEach((x,i)=>{ const t=syTutanakSktMin(x); const r=xlsxSktRenk(t); const ft=x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null);
-    rows.push(xlsxSatirBoya([i+1,...(resimli?[""]:[]),x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",alerjenHucre(x.barkod),x.skt||"",xlsxSktHucre(t),x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r,[])); });
+    rows.push(xlsxSatirBoya([i+1,...(resimli?[""]:[]),x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",alerjenHucre(x.barkod,x.ad),x.skt||"",xlsxSktHucre(t),x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r,[])); });
   const resimler=[]; if(resimli){ toast("Resimler hazırlanıyor…"); } for(let i=0;resimli&&i<satir.length;i++){ const v=await xlsxResim(satir[i].barkod); if(v) resimler.push({r:3+i,c:1,veri:v}); }
   rows.push([{v:"Toplam fark: "+tl(k.farkTutar),s:XLSX_STIL.kalin}]);
   indir("stok sayım "+trTarih((d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()))(new Date(k.bit)))+" "+k.kres+(resimli?" resimli":"")+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,...(resimli?[9]:[]),34,16,16,8,9,9,16,26,30,28,19,9,10,11],satirlar:rows,donuk:3,resimler}]));
@@ -2560,7 +2561,7 @@ function syTutanak(k){
   const satir=syTutanakSira(k.satirlar);
   const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}${(k.ekler||[]).length?"<br>Sonradan eklenenler: "+k.ekler.map(e=>trTarihSaat(e.t)+" ("+e.kalem+" ürün)").join(", "):""}</p>${(k.belgeIds||[]).length?`<p class="yazdirma">${belgeDugmeleri(k,"data-tbelge")}</p>`:""}
     <table><thead><tr><th>#</th><th>Ürün</th><th>Marka</th><th>Barkod</th><th>Birim</th><th>Sistem</th><th>Sayılan</th><th>Alerjenler</th><th>STT/TETT dağılımı</th><th>Sayım saati</th><th>Fark</th><th>Birim ₺</th><th>Fark ₺</th></tr></thead><tbody>
-    ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${alerjenMetin(x.barkod)?`<span class="pill no">Alerjenler: ${esc(alerjenMetin(x.barkod))}</span>`:""}</td><td class="small">${esc(x.skt||"")}${syTutanakSktMin(x)?" "+sktPill(syTutanakSktMin(x)):""}</td><td class="small">${x.sayimSaati?trTarihSaatSn(x.sayimSaati):""}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
+    ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${alerjenMetin(x.barkod,x.ad)?`<span class="pill no">Alerjenler: ${esc(alerjenMetin(x.barkod,x.ad))}</span>`:""}</td><td class="small">${esc(x.skt||"")}${syTutanakSktMin(x)?" "+sktPill(syTutanakSktMin(x)):""}</td><td class="small">${x.sayimSaati?trTarihSaatSn(x.sayimSaati):""}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
     </tbody><tfoot><tr><td colspan="12" style="text-align:right"><b>Toplam fark</b></td><td style="text-align:right"><b>${tl(k.farkTutar)}</b></td></tr></tfoot></table>
     <table style="margin-top:28px;border:0"><tr><td style="border:0;width:33%">Sayımı yapan<br><br>${esc(k.sayan||"")}<br>İmza:</td><td style="border:0;width:33%">Mutfak sorumlusu<br><br><br>İmza:</td><td style="border:0">Onaylayan<br><br><br>İmza:</td></tr></table></div>`;
   const b=dlg("Sayım tutanağı · "+k.kres, html, [{t:"Kapat"},...(V.sayimlar.some(x=>x.id===k.id)&&!k.yalnizKayit?[{t:"➕ Bu sayıma ekle",f:()=>{ setTimeout(()=>syEkBaslat(k.id),30); }}]:[]),{t:"Excel (resimli)",f:()=>{ syTutanakExcel(k,satir,true); return false; }},{t:"Excel (resimsiz)",f:()=>{ syTutanakExcel(k,satir,false); return false; }},{t:"Yazdır",c:"primary",f:()=>{ yazdir(html); return false; }}], true);

@@ -154,6 +154,16 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
 .kbtn:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.18)}
 .kbtn.g{background:linear-gradient(135deg,#1b6b52,#2e8f6f)}
 .kbtn.s{background:linear-gradient(135deg,#1d4f7a,#2f78b0)}
+#tab-kabul.hzmod #kbForm,#tab-kabul.hzmod #kbAdim2,#tab-kabul.hzmod #kbSonuc{display:none}
+#tab-kabul:not(.hzmod) #kbSon{display:none}
+#kbForm .hz{display:none!important}
+.kbs{border:1px solid var(--line);border-radius:12px;padding:4px 12px;margin-top:10px}
+.kbs .ad{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.kbs .ad:last-child{border-bottom:0}
+.kbs .no{flex:none;width:30px;height:30px;border-radius:50%;background:#c9d3cf;color:#fff;display:grid;place-items:center;font-weight:700}
+.kbs .no.ok{background:var(--brand)}
+.kbs .ad > div:last-child{flex:1;min-width:0}
+.kbs .bas{font-weight:700;margin-bottom:4px}
 .kbtn.p{background:linear-gradient(135deg,#7a2f22,#b0533a)}
 .kbtn.a{background:linear-gradient(135deg,#8a5a14,#c98a2e)}
 .kbtn.o{background:linear-gradient(135deg,#123b34,#1f5a4c);box-shadow:0 6px 22px rgba(0,0,0,.12),inset 0 0 0 2px var(--gold)}
@@ -316,27 +326,25 @@ img[data-g],.dlg img{cursor:zoom-in}
 </section>
 
 <!-- ============ MAL KABUL ============ -->
-<section class="tab" id="tab-kabul">
+<section class="tab hzmod" id="tab-kabul">
   <div class="sec-h"><h2>Mal Kabul</h2><span class="kr" data-kres></span>
-    <div class="sp"><button class="btn sm" id="kbTemizle">Formu temizle</button></div></div>
+    <div class="sp"><button class="btn sm" id="kbAyrinti">Ayrıntılı form</button><button class="btn sm" id="kbTemizle">Formu temizle</button></div></div>
   <div class="grid2">
     <div>
       <div class="card">
-        <h3>1 · Barkod</h3>
-        <p class="hint">Kamerayı açıp barkodu çerçeveye tutun ya da barkodun fotoğrafını çekin. Okununca bip sesi gelir.</p>
+        <h3>Okut</h3>
+        <p class="hint">Barkodu okutun → tarih yazan yerin fotoğrafını çekin → miktarı yazın → <b>Kaydet</b>. Kaydedilen ürün yandaki / alttaki listeye düşer.</p>
         <div id="kbKamera"></div>
-        <div id="kbSonuc"></div>
+        <div id="kbSonuc"></div><div id="kbSon"></div>
         <div class="adim2" id="kbAdim2"><b>2. STT / TETT ve parti</b><span id="kbAdim2Dur"></span>
           <label class="btn gold big">📸 2. Tarih yazan yerin fotoğrafını çek<input type="file" accept="image/*" capture="environment" hidden id="kbTarihFoto"></label>
           <div class="hizliTarih"><div class="chips" id="kbHtTur"><button data-t="STT" class="on">STT / SKT</button><button data-t="TETT">TETT</button></div>
             <label class="f" style="margin:0">ya da tarihi yazın (gün ay yıl, ör. <b>150327</b>)<input id="kbHt" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="GG AA YY"></label></div>
           <div class="small muted" id="kbOkuyucu"></div></div>
       </div>
-    </div>
-    <div>
       <div class="card" id="kbForm">
         <div id="kbUyari"></div>
-        <fieldset id="kbUrunFs"><legend>2 · Ürün kartı</legend>
+        <fieldset id="kbUrunFs"><legend>Ürün</legend>
           <div id="kbUrunOzet"></div>
           <div id="kbUrunAlan" class="fg">
             <div class="f w2" style="grid-column:1/-1;display:flex;gap:10px;align-items:center"><img id="u_gorselImg" alt="" style="display:none;width:84px;height:84px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px"><button type="button" class="btn sm" id="u_gorselCek">📷 Ürün görseli çek</button><button type="button" class="btn sm" id="u_gorselGal">🖼 Galeriden</button></div>
@@ -359,13 +367,13 @@ img[data-g],.dlg img{cursor:zoom-in}
           </div>
         </fieldset>
 
-        <fieldset><legend>3 · Etiketi okut (tarih · parti · üretici)</legend>
+        <fieldset class="ayr"><legend>3 · Etiketi okut (tarih · parti · üretici)</legend>
           <p class="hint" style="margin-top:0">Tarih yazan yerin fotoğrafı (<b>📸 2.</b> düğmesi) ya da canlı kamerada kendiliğinden okunan kare burada görünür. Bir alan okunamazsa fotoğrafta o kısmı parmağınızla çerçeveleyin, yalnız o kısım yeniden okunur.</p>
           <div id="kbFotoAlan"><div class="empty">Henüz fotoğraf yok</div></div>
           <div id="kbOcr"></div>
         </fieldset>
 
-        <fieldset><legend>4 · Parti ve tarihler</legend>
+        <fieldset><legend>STT / TETT ve parti</legend>
           <div class="fg">
             <label class="f">Parti / Lot no<input id="l_lot"></label>
             <label class="f">Üretim tarihi<input id="l_ut" type="date"></label>
@@ -376,18 +384,19 @@ img[data-g],.dlg img{cursor:zoom-in}
           </div>
         </fieldset>
 
-        <fieldset><legend>5 · Teslimat</legend>
+        <fieldset><legend>Miktar ve teslimat</legend>
           <div class="fg">
             <label class="f">Miktar * <span id="l_birimTxt"></span><span class="inrow"><button type="button" class="btn adim" onclick="miktarDegis('l_miktar',-1)">−</button><input id="l_miktar" type="number" min="0" step="any" inputmode="decimal"><button type="button" class="btn adim" onclick="miktarDegis('l_miktar',1)">+</button><button type="button" class="btn adim" id="l_koliEkle" title="Bir koli ekle">+koli</button></span><span class="small muted" id="l_koliTxt"></span></label>
-            <label class="f">Birim fiyat (₺, KDV hariç)<input id="l_fiyat" type="number" min="0" step="any"></label>
+            <label class="f ayr">Birim fiyat (₺, KDV hariç)<input id="l_fiyat" type="number" min="0" step="any"></label>
             <label class="f">Tedarikçi<select id="l_ted"></select></label>
             <label class="f">İrsaliye / Fatura no<input id="l_irs"></label>
-            <label class="f">Teslim tarihi<input id="l_tt" type="date"></label>
+            <label class="f ayr">Teslim tarihi<input id="l_tt" type="date"></label>
           </div>
         </fieldset>
 
-        <fieldset><legend>6 · Mal kabul kontrolü</legend>
-          <div class="ctl">
+        <fieldset><legend>Kontrol ve karar</legend>
+          <label class="hz" style="display:block;margin:4px 0 8px;font-weight:600"><input type="checkbox" id="c_hepsi" checked> Kontroller uygun <span class="small muted">(ambalaj, etiket, tarih, işletme no, araç, görünüş)</span></label>
+          <div class="ctl ayr">
             <label><input type="checkbox" id="c_amb"> Ambalaj sağlam, temiz, ezik/şişkin değil</label>
             <label><input type="checkbox" id="c_etk"> Etiket Türkçe ve okunaklı</label>
             <label><input type="checkbox" id="c_tar"> STT/TETT ve parti no basılı</label>
@@ -409,8 +418,10 @@ img[data-g],.dlg img{cursor:zoom-in}
         <button class="btn primary big" id="kbKaydet">Kaydet</button>
       </div>
     </div>
+    <div>
+  <div class="card"><div class="toolbar"><h3 style="margin:0;flex:1">Girilen mal kabuller</h3><div class="chips" id="kbAralik"><button data-g="0" class="on">Bugün</button><button data-g="7">Son 7 gün</button><button data-g="30">Son 30 gün</button><button data-g="9999">Tümü</button></div></div><div id="kbBugun"></div></div>
+    </div>
   </div>
-  <div class="card" style="margin-top:14px"><div class="toolbar"><h3 style="margin:0;flex:1">Girilen mal kabuller</h3><div class="chips" id="kbAralik"><button data-g="0" class="on">Bugün</button><button data-g="7">Son 7 gün</button><button data-g="30">Son 30 gün</button><button data-g="9999">Tümü</button></div></div><div id="kbBugun"></div></div>
 </section>
 
 <!-- ============ ÇIKIŞ ============ -->
@@ -1708,9 +1719,9 @@ function kbSifirla(){
   KB.analiz=null; KB.barkod=""; KB.urunVar=false; KB.foto=null; KB.gorselId=null; if($("#u_gorselImg")) $("#u_gorselImg").style.display="none"; KB.kirli=false; KB.ocrAlan.clear(); KB.kullaniciAlan.clear();
   KB_URUN.forEach(k=>{ const e=$("#u_"+k); if(e.tagName==="SELECT") e.selectedIndex=0; else e.value=""; });
   $("#u_birim").value="adet"; $("#u_saklama").value="oda"; kbAlerjenCiz([]);
-  ["lot","ut","us","skt","miktar","fiyat","irs","not"].forEach(k=>$("#l_"+k).value=""); if($("#kbHt")) $("#kbHt").value="";
+  ["lot","ut","us","skt","miktar","fiyat","not"].forEach(k=>$("#l_"+k).value=""); if($("#kbHt")) $("#kbHt").value="";
   $("#l_tur").value="STT"; $("#l_tt").value=bugun(); $("#c_sic").value="";
-  ["amb","etk","tar","isl","arac","gor"].forEach(k=>$("#c_"+k).checked=true);
+  ["amb","etk","tar","isl","arac","gor"].forEach(k=>$("#c_"+k).checked=true); if($("#c_hepsi")) $("#c_hepsi").checked=true;
   kbKararSec("KABUL");
   $$("#tab-kabul .okundu").forEach(e=>e.classList.remove("okundu"));
   $("#kbSonuc").innerHTML=""; $("#kbUyari").innerHTML=""; KB.otoNo++; setTimeout(kbAdim2);
@@ -2020,6 +2031,57 @@ async function kbSil(id){ const h=V.hareketler.find(x=>x.id===id); if(!h) return
   if(!await onayla("<b>"+esc(u.ad||h.barkod)+"</b> · "+nf(h.kayitMiktar??h.miktar)+" "+esc(u.birim||"")+" mal kabul kaydı silinsin mi? Stoktan da düşer.","Sil")) return;
   V.hareketler=V.hareketler.filter(x=>x.id!==id); if(!diger.length) delete V.lotlar[h.lotId];
   kaydet(); kbBugunCiz(); urunListesiGuncelle(); toast("Mal kabul kaydı silindi"); }
+/* ===== Kısa mal kabul paneli (sayım ekranı gibi adım adım) — ayrıntılı formun alanlarını doldurur ===== */
+const KB_SON={k:null};
+function kbSonCiz(){ const e=$("#kbSon"); if(!e||!$("#tab-kabul").classList.contains("hzmod")) return;
+  const u=V.urunler[KB.barkod]; const key=(KB.barkod||"")+"|"+(KB.urunVar?1:0);
+  if(KB_SON.k!==key){ KB_SON.k=key;
+    if(!KB.barkod){ e.innerHTML='<div class="empty" style="margin-top:10px">Barkodu okutun. Ürün, tarih ve miktar burada adım adım çıkar.</div>'; return; }
+    const birim=$("#u_birim").value||"adet"; const sak=$("#u_saklama").value;
+    e.innerHTML=`<div class="kbs">
+      <div class="ad"><div class="no ok">✓</div><div><div class="bas">Barkod okundu</div>${u?`<div style="font-size:19px;font-weight:700;color:var(--brand)">${esc(u.ad)}</div><div class="small muted">${esc(u.marka||"")}${u.net?" · "+esc(u.net):""} · Stok: <b>${nf(stokOf(u.barkod,aktifKres()))} ${esc(u.birim||"")}</b></div>`:`<div class="small neg" style="font-weight:700">Yeni ürün — adını yazın</div><input id="ks_ad" placeholder="Ürün adı" style="font-size:16px;width:100%;margin-top:4px" value="${esc($("#u_ad").value)}"><div style="display:flex;gap:6px;margin-top:6px"><select id="ks_birim">${BIRIMLER.map(b=>`<option${b===birim?" selected":""}>${b}</option>`).join("")}</select><select id="ks_sak">${Object.entries(SAKLAMA).map(([k,v])=>`<option value="${k}"${k===sak?" selected":""}>${esc(v)}</option>`).join("")}</select></div>`}<div class="small muted">${esc(KB.barkod)}</div></div></div>
+      <div class="ad"><div class="no" id="ks_n2">2</div><div><div class="bas">STT / TETT ve parti</div>
+        <button class="btn primary" id="ks_foto">📸 Tarihin resmini çek</button>
+        <div class="small muted" id="ks_dur" style="margin:4px 0"></div>
+        <div class="chips" id="ks_tur" style="margin:4px 0"><button data-t="STT">STT</button><button data-t="TETT">TETT</button></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><input id="ks_skt" inputmode="numeric" placeholder="Tarih: 26.10.2026" style="font-size:16px;flex:1;min-width:140px"><input id="ks_lot" placeholder="Parti no" style="font-size:16px;flex:1;min-width:110px"></div>
+        <div class="small muted" id="ks_ut" style="margin-top:4px"></div></div></div>
+      <div class="ad"><div class="no ok" id="ks_n3">3</div><div><div class="bas">Miktar</div>
+        <div style="display:flex;gap:6px;align-items:center"><button class="btn" id="ks_eks">−1</button><input id="ks_m" type="number" min="0" step="any" inputmode="decimal" style="font-size:20px;width:110px;text-align:center"><button class="btn" id="ks_art">+1</button><span id="ks_b">${esc(u?u.birim:birim)}</span></div></div></div>
+      <div class="ad"><div class="no ok">4</div><div><div class="bas">Teslimat ve kontrol</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><select id="ks_ted" style="flex:1">${[...$("#l_ted").options].map(o=>`<option${o.value===$("#l_ted").value?" selected":""}>${esc(o.value)}</option>`).join("")}</select><input id="ks_irs" placeholder="İrsaliye no" style="flex:1;min-width:110px" value="${esc($("#l_irs").value)}"></div>
+        ${(u?u.saklama:sak)!=="oda"?`<label class="small" style="display:block;margin-top:6px">Ürün sıcaklığı (°C) <input id="ks_sic" type="number" step="0.1" style="width:90px" value="${esc($("#c_sic").value)}"></label>`:""}
+        <label style="display:block;margin-top:6px"><input type="checkbox" id="ks_kont" ${$("#c_amb").checked&&$("#c_etk").checked&&$("#c_tar").checked&&$("#c_isl").checked&&$("#c_arac").checked&&$("#c_gor").checked?"checked":""}> Kontroller uygun <span class="small muted">(ambalaj, etiket, tarih, işletme no, araç, görünüş)</span></label>
+        <div class="chips" id="ks_karar" style="margin-top:6px"><button data-k="KABUL">KABUL</button><button data-k="SARTLI">ŞARTLI</button><button data-k="RED">RED</button></div>
+        <input id="ks_not" placeholder="Not / red nedeni" style="width:100%;margin-top:6px" value="${esc($("#l_not").value)}"></div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="ks_vaz" style="flex:1">Vazgeç</button><button class="btn primary big" id="ks_kay" style="flex:2">Kaydet</button></div>`;
+    const yaz=(id,v,ev="input")=>{ const x=$("#"+id); x.value=v; x.dispatchEvent(new Event(ev,{bubbles:true})); x.dispatchEvent(new Event("change",{bubbles:true})); };
+    if($("#ks_ad")){ $("#ks_ad").oninput=x=>yaz("u_ad",x.target.value); $("#ks_birim").onchange=x=>{ yaz("u_birim",x.target.value,"change"); $("#ks_b").textContent=x.target.value; }; $("#ks_sak").onchange=x=>yaz("u_saklama",x.target.value,"change"); }
+    $("#ks_foto").onclick=()=>$("#kbTarihFoto").click();
+    $$("#ks_tur button").forEach(b=>b.onclick=()=>{ yaz("l_tur",b.dataset.t,"change"); kbSonGuncelle(); });
+    tarihMaske($("#ks_skt")); $("#ks_skt").oninput=x=>{ const d=x.target.value.replace(/\D/g,""); const t=d.length===8?tarihGecerli(+d.slice(4,8),+d.slice(2,4),+d.slice(0,2)):null; if(t){ yaz("l_skt",t); if(gunFark(t)>=0&&kbKarar()==="RED"&&KB_SON.otoRed!==false) kbKararSec("KABUL"); $("#l_skt").classList.remove("okundu"); kbAdim2(); } };
+    $("#ks_lot").oninput=x=>yaz("l_lot",x.target.value);
+    const mk=d=>{ const v=Math.max(0,yuvarla((+$("#ks_m").value||0)+d)); $("#ks_m").value=v; yaz("l_miktar",v); };
+    $("#ks_m").oninput=x=>yaz("l_miktar",x.target.value); $("#ks_eks").onclick=()=>mk(-1); $("#ks_art").onclick=()=>mk(1);
+    $("#ks_ted").onchange=x=>yaz("l_ted",x.target.value,"change"); $("#ks_irs").oninput=x=>yaz("l_irs",x.target.value);
+    if($("#ks_sic")) $("#ks_sic").oninput=x=>yaz("c_sic",x.target.value);
+    $("#ks_kont").onchange=x=>{ ["amb","etk","tar","isl","arac","gor"].forEach(k=>$("#c_"+k).checked=x.target.checked); };
+    $$("#ks_karar button").forEach(b=>b.onclick=()=>{ kbKararSec(b.dataset.k); kbSonGuncelle(); });
+    $("#ks_not").oninput=x=>yaz("l_not",x.target.value);
+    $("#ks_vaz").onclick=()=>{ kbSifirla(); KB_SON.k=null; kbSonCiz(); };
+    $("#ks_kay").onclick=async()=>{ if(!$("#l_miktar").value) yaz("l_miktar",$("#ks_m").value||"1"); const ok=await kbKaydet(false); if(ok){ KB_SON.k=null; kbSonCiz(); } };
+    if(!$("#l_miktar").value) yaz("l_miktar", KB.analiz&&KB.analiz.tartili?KB.analiz.tartili.kg:1);
+  }
+  if(KB.barkod) kbSonGuncelle(); }
+// gizli formdaki değerleri (fotoğraftan okunan tarih vb.) panele yansıt; yazılan kutuya dokunma
+function kbSonGuncelle(){ const set=(id,v)=>{ const x=$("#"+id); if(x&&document.activeElement!==x&&x.value!==String(v??"")) x.value=v??""; };
+  const skt=$("#l_skt").value; set("ks_skt",skt?trTarih(skt):""); set("ks_lot",$("#l_lot").value); set("ks_m",$("#l_miktar").value);
+  const n2=$("#ks_n2"); if(n2){ n2.classList.toggle("ok",!!skt); n2.textContent=skt?"✓":"2"; }
+  const tr=$("#l_tur").value; $$("#ks_tur button").forEach(b=>b.classList.toggle("on",b.dataset.t===tr));
+  const kr=kbKarar(); $$("#ks_karar button").forEach(b=>b.classList.toggle("on",b.dataset.k===kr));
+  const dur=$("#ks_dur"); if(dur){ const ad=$("#kbAdim2Dur"); dur.innerHTML=skt?(($("#l_skt").classList.contains("okundu")?"⚠ Okunan tarihi kontrol edin: ":"✓ ")+tr+" "+trTarih(skt)):(ad?ad.innerHTML:""); }
+  const ut=$("#ks_ut"); if(ut) ut.textContent=$("#l_ut").value?"Üretim: "+trTarih($("#l_ut").value)+($("#l_us").value?" "+$("#l_us").value:""):""; }
 SAYFA.kabul = {
   ilk(){
     selDoldur($("#u_grup"),GRUPLAR); selDoldur($("#u_birim"),BIRIMLER,"adet"); selDoldur($("#u_saklama"),Object.entries(SAKLAMA),"oda");
@@ -2039,6 +2101,9 @@ SAYFA.kabul = {
     $("#u_alerjen").onclick=e=>{ const b=e.target.closest("button"); if(b){ b.classList.toggle("on"); KB.kirli=true; } };
     $("#kbKarar").onclick=e=>{ const l=e.target.closest("label"); if(l) setTimeout(()=>kbKararSec($("input",l).value)); };
     $("#kbKaydet").onclick=()=>kbKaydet(false);
+    $("#c_hepsi").onchange=e=>{ ["amb","etk","tar","isl","arac","gor"].forEach(k=>$("#c_"+k).checked=e.target.checked); };
+    $("#kbAyrinti").onclick=()=>{ const t=$("#tab-kabul"); t.classList.toggle("hzmod"); $("#kbAyrinti").textContent=t.classList.contains("hzmod")?"Ayrıntılı form":"Kısa form"; KB_SON.k=null; kbSonCiz(); };
+    setInterval(()=>{ if(AKTIF_SEKME==="kabul") kbSonCiz(); },600);
     $("#kbTemizle").onclick=()=>{ KB.ocrMetin=""; kbSifirla(); };
     $("#l_skt").addEventListener("input",()=>{ kbKalanGoster(); kbAdim2(); }); $("#c_sic").addEventListener("input",kbSicDur); $("#u_saklama").addEventListener("change",kbSicDur);
     $("#u_birim").addEventListener("change",()=>$("#l_birimTxt").textContent="("+$("#u_birim").value+")");

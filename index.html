@@ -1006,6 +1006,13 @@ function fotoSonrasi(){ setTimeout(()=>{ FOTO_CEKILIYOR=0; const k=FOTO_SONRA_AC
 document.addEventListener("click",e=>{ const t=e.target; const inp=t&&(t.matches&&t.matches('input[type="file"]')?t:(t.closest&&t.closest("label")&&t.closest("label").querySelector('input[type="file"]'))); if(inp){ fotoOncesi(); inp.addEventListener("change",fotoSonrasi,{once:true}); } },true);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&FOTO_CEKILIYOR&&Date.now()-FOTO_CEKILIYOR>1500) fotoSonrasi(); });
 window.addEventListener("focus",()=>{ if(FOTO_CEKILIYOR&&Date.now()-FOTO_CEKILIYOR>1500) fotoSonrasi(); }); // fotoğraftan vazgeçildiyse
+// ekran açık kalsın: mal kabul, sayım, çıkış ekranlarında telefon kendiliğinden kararmasın/kilitlenmesin
+const EKRAN={kilit:null};
+async function ekranAcikTut(){ try{ const ist=["kabul","sayim","cikis","islenmis","sevk"].includes(typeof AKTIF_SEKME!=="undefined"?AKTIF_SEKME:"");
+    if(ist && !document.hidden && "wakeLock" in navigator){ if(!EKRAN.kilit||EKRAN.kilit.released){ EKRAN.kilit=await navigator.wakeLock.request("screen"); } }
+    else if(!ist && EKRAN.kilit && !EKRAN.kilit.released){ await EKRAN.kilit.release(); EKRAN.kilit=null; } }catch(e){} }
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) ekranAcikTut(); });
+setInterval(ekranAcikTut,5000);
 function gorselSec(kamera){ fotoOncesi(); return new Promise(res=>{ const i=document.createElement("input"); i.type="file"; i.accept="image/*"; if(kamera) i.capture="environment"; i.onchange=()=>{ fotoSonrasi(); res(i.files[0]||null); }; i.click(); }); }
 async function urunGorselDegistir(barkod, kamera){
   const f=await gorselSec(kamera); if(!f) return false;
@@ -1618,8 +1625,9 @@ class Kamera{
   fotoCek(){ const c=this.kare(); if(!c){ toast("Önce kamerayı açın ya da fotoğraf yükleyin",1); return; } bip(); this.o.onFoto && this.o.onFoto(c); }
   async dosyaOku(f){
     const img=new Image(); img.src=URL.createObjectURL(f); await img.decode().catch(()=>{});
-    const c=document.createElement("canvas"); c.width=img.naturalWidth; c.height=img.naturalHeight; c.getContext("2d").drawImage(img,0,0);
-    URL.revokeObjectURL(img.src);
+    const k=Math.min(1,2600/Math.max(img.naturalWidth||1,img.naturalHeight||1)); // bellek taşmasın
+    const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k); c.getContext("2d").drawImage(img,0,0,c.width,c.height);
+    URL.revokeObjectURL(img.src); img.src="";
     const yuk=$(".fotoCek span",this.kap); if(yuk) yuk.textContent="⏳ Okunuyor…";
     try{ let src=c; if(Math.max(c.width,c.height)>2400){ const s=2400/Math.max(c.width,c.height); src=document.createElement("canvas"); src.width=Math.round(c.width*s); src.height=Math.round(c.height*s); src.getContext("2d").drawImage(c,0,0,src.width,src.height); }
       let r=await Barkod.oku(src.getContext("2d").getImageData(0,0,src.width,src.height));
@@ -1644,7 +1652,7 @@ function sekme(ad){
   $$("nav.tabs button").forEach(b=>b.classList.toggle("on",b.dataset.tab===ad));
   $$(".tab").forEach(s=>s.classList.toggle("on",s.id==="tab-"+ad));
   SAYFA[ad] && SAYFA[ad].goster && SAYFA[ad].goster();
-  window.scrollTo(0,0);
+  window.scrollTo(0,0); ekranAcikTut();
   // kamera daha önce bu cihazda açıldıysa okutma ekranlarında kendiliğinden aç
   let canli=false; try{ canli=localStorage.getItem("b360canli")==="1"; }catch(_){}
   const k={kabul:()=>KB.kam, cikis:()=>CK.kam, sayim:()=>V.aktifSayim&&V.aktifSayim.kres===aktifKres()?SY.kam:null}[ad];
@@ -1780,8 +1788,10 @@ async function okuyucuDurum(){ const e=$("#kbOkuyucu"); if(!e) return;
   if(!ARTIFACT){ e.textContent="Okuyucu: bu bilgisayardaki yazı okuyucu (nokta baskılı tarihlerde yanılabilir, tarihi kontrol edin)."; return; }
   const ok=await ClaudeOkur.kullanilabilir(); e.innerHTML=ok?"Okuyucu: <b>Claude</b> ✓":"Okuyucu: telefondaki yazı okuyucu ("+(navigator.onLine?"Claude bu ekranda kullanılamıyor":"internet yok")+") · tarihi mutlaka kontrol edin"; }
 async function kbTarihDosya(f){ // yalnız yazı okunur, barkod aranmaz
+  // telefon fotoğrafı 12+ MP: belleği doldurup programı kapatmasın diye hemen küçült (en uzun kenar 2000 px)
   const img=new Image(); img.src=URL.createObjectURL(f); await img.decode().catch(()=>{});
-  const c=document.createElement("canvas"); c.width=img.naturalWidth; c.height=img.naturalHeight; c.getContext("2d").drawImage(img,0,0); URL.revokeObjectURL(img.src);
+  const k=Math.min(1,2000/Math.max(img.naturalWidth||1,img.naturalHeight||1));
+  const c=document.createElement("canvas"); c.width=Math.round(img.naturalWidth*k); c.height=Math.round(img.naturalHeight*k); c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(img.src); img.src="";
   const d=$("#kbAdim2Dur"); if(d) d.textContent="Okunuyor…"; kbFotoGoster(c); $("#kbFotoAlan").scrollIntoView({behavior:"smooth",block:"center"}); }
 function kbAdim2(){ const e=$("#kbAdim2"); if(!e) return; const ok=!!$("#l_skt").value; e.classList.toggle("tamam",ok);
   const d=$("#kbAdim2Dur"); if(d && !ok) d.textContent=KB.barkod?"Ambalajı çevirin; STT/TETT ve parti yazan yerin fotoğrafını çekin"+(KB.kam&&KB.kam.akis?" ya da kameraya tutun.":"."):"Önce barkodu okutun, sonra bu düğmeyle tarih yazan yeri çekin.";

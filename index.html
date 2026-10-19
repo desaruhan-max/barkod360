@@ -1863,7 +1863,14 @@ async function kbOcrCalistir(kutu){
   taniKaydet({t:new Date().toISOString(),olay:"basladi",claude:claudeVar,kapali:ClaudeOkur.kapali,online:navigator.onLine,sample:!!ClaudeOkur.s,kutu:!!kutu});
   try{
     if(claudeVar){
-      try{ const R=await ClaudeOkur.oku(KB.foto,kutu,ilerle); if(no!==KB.ocrSayac) return;
+      try{ let R;
+        if(KB.urunVar && !kutu){ // kayıtlı ürün: yalnız tarih/parti gerekir → kısa ve hızlı okuma
+          ilerle(.3,"Tarih okunuyor… (birkaç saniye)"); const q=await ClaudeOkur.tarihOku(KB.foto);
+          R={tarihler:[],skt:q.skt,sktTur:q.sktTur||(q.skt?"STT":""),ut:q.ut,us:q.us,lot:q.lot,isletme:"",uretici:"",adres:"",net:"",mensei:"",saklama:"",alerjen:[],icerik:"",grup:"",marka:"",ad:"",supheli:[],claude:true};
+          if(R.skt) R.tarihler.push({iso:R.skt,tur:R.sktTur}); if(R.ut) R.tarihler.push({iso:R.ut,tur:"URETIM"});
+          R.satirlar=[R.skt&&(R.sktTur+": "+trTarih(R.skt)),R.ut&&("Üretim: "+trTarih(R.ut)+(R.us?" "+R.us:"")),R.lot&&("Parti: "+R.lot)].filter(Boolean); R.metin=R.satirlar.join("\n"); R.ham=JSON.stringify(q); ilerle(1,"Claude okudu"); }
+        else R=await ClaudeOkur.oku(KB.foto,kutu,ilerle);
+        if(no!==KB.ocrSayac) return;
         taniKaydet({t:new Date().toISOString(),motor:"claude",kutu:!!kutu,sonuc:{skt:R.skt,tur:R.sktTur,ut:R.ut,lot:R.lot,uretici:R.uretici},metin:(R.metin||"").slice(0,1500),ham:R.ham},KB.foto);
         KB.ocrMetin=(KB.ocrMetin?KB.ocrMetin+"\n":"")+R.metin; kbOcrUygula(R, true);
         if(dur) dur.textContent="Claude okudu. Yanlış bir alan varsa düzeltin; eksikse o kısmı yakından çekin.";

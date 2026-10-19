@@ -2105,11 +2105,38 @@ function kbSonGuncelle(){ const set=(id,v)=>{ const x=$("#"+id); if(x&&document.
   const kr=kbKarar(); $$("#ks_karar button").forEach(b=>b.classList.toggle("on",b.dataset.k===kr));
   const dur=$("#ks_dur"); if(dur){ const ad=$("#kbAdim2Dur"); dur.innerHTML=skt?(($("#l_skt").classList.contains("okundu")?"⚠ Okunan tarihi kontrol edin: ":"✓ ")+tr+" "+trTarih(skt)):(ad?ad.innerHTML:""); }
   const ut=$("#ks_ut"); if(ut) ut.textContent=$("#l_ut").value?"Üretim: "+trTarih($("#l_ut").value)+($("#l_us").value?" "+$("#l_us").value:""):""; }
+// barkodsuz ürün (açık ürün, kasap/manav, etiketsiz paket): iç kodla kart aç ya da öncekilerden seç, sonra normal mal kabul
+function kbBarkodsuz(){
+  const mevcut=Object.values(V.urunler).filter(u=>u.barkodsuz||/^20\d{11}$/.test(u.barkod)).sort((a,b)=>a.ad.localeCompare(b.ad,"tr"));
+  let secili=null, foto=null;
+  const b=dlg("🫙 Barkodsuz ürün",`<p class="hint" style="margin-top:0">Barkodu olmayan ürün (açık ürün, manav, kasap, etiketsiz paket).</p>
+    <div style="display:flex;gap:10px;align-items:center"><img id="kbsImg" alt="" style="display:none;width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><button type="button" class="btn" id="kbsFoto" style="flex:1">📸 Ürünün resmini çek (isteğe bağlı)</button></div>
+    ${mevcut.length?`<div class="small" style="font-weight:700;margin-top:8px">Daha önce tanıtılanlar:</div><div class="skt-chips" style="margin-bottom:8px;max-height:160px;overflow:auto">${mevcut.map(u=>`<button type="button" data-kbs="${esc(u.barkod)}">${esc(u.ad)}</button>`).join("")}</div>`:""}
+    <label class="f">Ürünün adı<input id="kbsAd" placeholder="Örn. Kuru üzüm, Maydanoz" style="font-size:17px"></label>
+    <label class="f">Marka / tedarikçi (varsa)<input id="kbsMarka" style="font-size:16px"></label>
+    <div class="inrow" style="gap:8px;align-items:flex-end"><label class="f" style="flex:1">Miktar<input id="kbsMik" type="number" min="0" step="any" inputmode="decimal" style="font-size:20px"></label>
+    <label class="f" style="width:110px">Birim<select id="kbsBirim" style="font-size:16px">${["kg","g","adet","lt","bağ","paket","kavanoz"].map(x=>`<option>${x}</option>`).join("")}</select></label></div>`,
+    [{t:"Vazgeç"},{t:"Devam",c:"primary",f:()=>{ const ad=$("#kbsAd",b).value.trim(); const mik=+$("#kbsMik",b).value||0; const birim=$("#kbsBirim",b).value; const marka=$("#kbsMarka",b).value.trim();
+      if(!ad){ toast("Ürünün adını yazın ya da listeden seçin",1); return false; }
+      let u=secili&&V.urunler[secili]; if(!u) u=mevcut.find(x=>x.ad.toLocaleLowerCase("tr")===ad.toLocaleLowerCase("tr")&&x.birim===birim);
+      let kod;
+      if(u){ kod=u.barkod; u.ad=ad; if(marka) u.marka=marka; u.birim=birim; }
+      else { do{ const g="20"+String(Math.floor(Math.random()*1e10)).padStart(10,"0"); kod=g+kontrolHanesi(g); }while(V.urunler[kod]);
+        u=V.urunler[kod]={barkod:kod,ad,marka,barkodsuz:true,birim,grup:"Muhtelif Gıda",saklama:"oda",alerjen:[],uretici:"(barkodsuz / açık ürün)",olusturma:new Date().toISOString(),son:{}};
+        const g=grupTahmin(u); if(g){ u.grup=g; u.grupOto=true; } if(g==="Et, Tavuk ve Balık"||g==="Meyve ve Sebze"||g==="Süt ve Süt Ürünleri") u.saklama="soguk"; }
+      if(foto) u.gorselId=foto;
+      kaydet(); urunListesiGuncelle();
+      setTimeout(async()=>{ await kbBarkod({gtin:kod,ham:kod,ai:{},format:"İç kod",foto:true}); if(mik>0){ const m=$("#l_miktar"); m.value=mik; m.dispatchEvent(new Event("input",{bubbles:true})); } KB_SON.k=null; kbSonCiz(); },30); }}]);
+  $$("[data-kbs]",b).forEach(x=>x.onclick=()=>{ secili=x.dataset.kbs; const u=V.urunler[secili]; $$("[data-kbs]",b).forEach(y=>y.classList.toggle("on",y===x)); $("#kbsAd",b).value=u.ad; $("#kbsMarka",b).value=u.marka||""; if([...$("#kbsBirim",b).options].some(o=>o.value===u.birim)) $("#kbsBirim",b).value=u.birim; $("#kbsMik",b).focus(); });
+  $("#kbsFoto",b).onclick=async()=>{ const f=await gorselSec(true); if(!f) return;
+    try{ const bm=await createImageBitmap(f); const k=Math.min(1,1600/Math.max(bm.width,bm.height)); const c=document.createElement("canvas"); c.width=Math.round(bm.width*k); c.height=Math.round(bm.height*k); c.getContext("2d").drawImage(bm,0,0,c.width,c.height);
+      foto=await gorselKaydet(c); const im=$("#kbsImg",b); im.src=c.toDataURL("image/jpeg",.7); im.style.display=""; }catch(e){ toast("Resim kaydedilemedi",1); } };
+}
 SAYFA.kabul = {
   ilk(){
     selDoldur($("#u_grup"),GRUPLAR); selDoldur($("#u_birim"),BIRIMLER,"adet"); selDoldur($("#u_saklama"),Object.entries(SAKLAMA),"oda");
     selDoldur($("#l_ted"),V.ayar.tedarikciler.concat(["Diğer"]));
-    KB.kam=new Kamera($("#kbKamera"),{onBarkod:kbBarkod,onFoto:kbFotoGoster,fotoMetin:"📸 1. Barkodun fotoğrafını çek",fotoAlt:"yalnız barkodu çekin, yakından ve net"});
+    KB.kam=new Kamera($("#kbKamera"),{onBarkod:kbBarkod,onBarkodsuz:()=>kbBarkodsuz(),onFoto:kbFotoGoster,fotoMetin:"📸 1. Barkodun fotoğrafını çek",fotoAlt:"yalnız barkodu çekin, yakından ve net"});
     $("#kbTarihFoto").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) kbTarihDosya(f); }; kbAdim2();
     const gAl=async kam=>{ const f=await gorselSec(kam); if(!f) return; try{ KB.gorselId=await gorselKaydet(f); KB.kirli=true; kbGorselGoster(); toast("Ürün görseli eklendi, kayıtta ürüne bağlanır"); }catch(e){ toast("Görsel alınamadı: "+e.message,1); } };
     $("#u_gorselCek").onclick=()=>gAl(true); $("#u_gorselGal").onclick=()=>gAl(false);

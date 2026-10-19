@@ -336,7 +336,7 @@ img[data-g],.dlg img{cursor:zoom-in}
       <div class="card">
         <h3>Okut</h3>
         <p class="hint">Barkodu okutun → tarih yazan yerin fotoğrafını çekin → miktarı yazın → <b>Kaydet</b>. Kaydedilen ürün yandaki / alttaki listeye düşer.</p>
-        <div id="kbKamera"></div>
+        <div id="kbAraUrun"></div><div id="kbKamera"></div>
         <div id="kbSonuc"></div><div id="kbSon"></div>
         <div class="adim2" id="kbAdim2"><b>2. STT / TETT ve parti</b><span id="kbAdim2Dur"></span>
           <label class="btn gold big">📸 2. Tarih yazan yerin fotoğrafını çek<input type="file" accept="image/*" capture="environment" hidden id="kbTarihFoto"></label>
@@ -961,6 +961,20 @@ function urunBul(kod){ if(!kod) return null; if(V.urunler[kod]) return V.urunler
   // GTIN-14 / UPC-A eşleştirme
   const k=String(kod).replace(/^0+/,""); for(const b in V.urunler){ if(b.replace(/^0+/,"")===k) return V.urunler[b]; }
   return null; }
+// Ürün arama kutusu: adın/markanın baş harflerini yazınca kayıtlı ürünleri hemen listeler (Türkçe harf farkı gözetmez)
+function urunAraKutu(kap, onSec, ipucu){ if(!kap) return; kap.innerHTML=`<div style="position:relative;margin-bottom:10px"><input type="search" class="uak-in" autocomplete="off" placeholder="${esc(ipucu||"🔍 Ürün ara: adının ya da markasının ilk harflerini yazın")}" style="width:100%;font-size:17px;padding:11px 12px;border:2px solid var(--brand);border-radius:10px"><div class="uak-l" style="position:absolute;left:0;right:0;top:100%;z-index:40;background:var(--card,#fff);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);max-height:360px;overflow:auto;display:none"></div></div>`;
+  const inp=$(".uak-in",kap), l=$(".uak-l",kap);
+  const ara=()=>{ const q=katla(inp.value).trim(); if(!q){ l.style.display="none"; l.innerHTML=""; return; }
+    const kel=q.split(/\s+/).filter(Boolean), k=aktifKres();
+    const r=Object.values(V.urunler).filter(u=>!u.tanimsiz&&u.ad).map(u=>{ const ad=katla(u.ad), mk=katla(u.marka||""), t=ad+" "+mk+" "+u.barkod; const sz=t.split(/[\s·.,()/-]+/);
+        if(!kel.every(w=>t.includes(w))) return null; let p=0; if(ad.startsWith(kel[0])) p+=4; if(kel.every(w=>sz.some(z=>z.startsWith(w)))) p+=2; const st=stokOf(u.barkod,k); if(st>0) p+=1; return {u,st,p}; })
+      .filter(Boolean).sort((a,b)=>b.p-a.p||a.u.ad.localeCompare(b.u.ad,"tr")).slice(0,10);
+    l.innerHTML=r.length?r.map(x=>`<button type="button" data-uak="${esc(x.u.barkod)}" style="display:flex;width:100%;gap:10px;align-items:center;text-align:left;padding:9px 12px;border:0;border-bottom:1px solid var(--line);background:none;cursor:pointer"><span style="flex:1;min-width:0"><b>${esc(x.u.ad)}</b>${x.u.marka?' <span class="muted">· '+esc(x.u.marka)+"</span>":""}<div class="small muted">${x.u.net?esc(x.u.net)+" · ":""}${esc(x.u.barkod)}</div></span><span class="small" style="white-space:nowrap">${x.st>0?"<b>"+nf(x.st)+"</b> "+esc(x.u.birim||""):'<span class="muted">stok yok</span>'}</span></button>`).join(""):'<div class="small muted" style="padding:10px 12px">Kayıtlı ürün bulunamadı</div>';
+    l.style.display="block";
+    $$("[data-uak]",l).forEach(b=>b.onclick=()=>{ const u=V.urunler[b.dataset.uak]; inp.value=""; l.style.display="none"; l.innerHTML=""; inp.blur(); if(u) onSec(u); }); };
+  inp.addEventListener("input",ara); inp.addEventListener("focus",ara);
+  inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ const f=$("[data-uak]",l); if(f){ e.preventDefault(); f.click(); } } else if(e.key==="Escape"){ inp.value=""; ara(); } });
+  document.addEventListener("click",e=>{ if(!kap.contains(e.target)) l.style.display="none"; }); }
 function urunAd(b){ const u=V.urunler[b]; return u?(u.ad+(u.marka?" · "+u.marka:"")):b; }
 function lotlarOf(barkod, kres){ return Object.values(V.lotlar).filter(l=>l.barkod===barkod && (!kres||l.kres===kres)); }
 function fefoSirala(lotlar){ return lotlar.slice().sort((a,b)=> (a.skt||"9999").localeCompare(b.skt||"9999") || (a.girisTarihi||"").localeCompare(b.girisTarihi||"")); }
@@ -2138,7 +2152,7 @@ SAYFA.kabul = {
   ilk(){
     selDoldur($("#u_grup"),GRUPLAR); selDoldur($("#u_birim"),BIRIMLER,"adet"); selDoldur($("#u_saklama"),Object.entries(SAKLAMA),"oda");
     selDoldur($("#l_ted"),V.ayar.tedarikciler.concat(["Diğer"]));
-    KB.kam=new Kamera($("#kbKamera"),{onBarkod:kbBarkod,onBarkodsuz:()=>kbBarkodsuz(),onFoto:kbFotoGoster,fotoMetin:"📸 1. Barkodun fotoğrafını çek",fotoAlt:"yalnız barkodu çekin, yakından ve net"});
+    urunAraKutu($("#kbAraUrun"),u=>kbBarkod({gtin:u.barkod,ham:u.barkod,ai:{},format:"Ad ile"})); KB.kam=new Kamera($("#kbKamera"),{onBarkod:kbBarkod,onBarkodsuz:()=>kbBarkodsuz(),onFoto:kbFotoGoster,fotoMetin:"📸 1. Barkodun fotoğrafını çek",fotoAlt:"yalnız barkodu çekin, yakından ve net"});
     $("#kbTarihFoto").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) kbTarihDosya(f); }; kbAdim2();
     const gAl=async kam=>{ const f=await gorselSec(kam); if(!f) return; try{ KB.gorselId=await gorselKaydet(f); KB.kirli=true; kbGorselGoster(); toast("Ürün görseli eklendi, kayıtta ürüne bağlanır"); }catch(e){ toast("Görsel alınamadı: "+e.message,1); } };
     $("#u_gorselCek").onclick=()=>gAl(true); $("#u_gorselGal").onclick=()=>gAl(false);
@@ -2499,8 +2513,9 @@ function syCiz(){
   const ekK=s.ekId&&V.sayimlar.find(x=>x.id===s.ekId);
   ust.innerHTML=(ekK?`<span class="pill dk" style="margin-right:6px">➕ ${trTarihSaat(ekK.bit)} sayımına ekleme</span>`:"")+`<button class="btn sm danger" id="syIptal">${ekK?"Eklemeyi iptal et":"Sayımı iptal et"}</button><button class="btn sm gold" id="syBitir">${ekK?"Eklemeyi bitir ve işle":"Sayımı bitir ve işle"}</button>`;
   if(!$("#syKamW")){
-    gv.innerHTML=`<div class="grid2"><div><div class="card sticky"><h3>Okut</h3><p class="hint">Bir okutma = 1. Aynı üründen bir tane daha saymak için <b>+1</b>e basın. Barkod kameranın önünde kalsa da tekrar saymaz.</p><div id="syKamW"></div><div id="sySon"></div></div></div>
+    gv.innerHTML=`<div class="grid2"><div><div class="card sticky"><h3>Okut</h3><p class="hint">Bir okutma = 1. Aynı üründen bir tane daha saymak için <b>+1</b>e basın. Barkod kameranın önünde kalsa da tekrar saymaz.</p><div id="syAraUrun"></div><div id="syKamW"></div><div id="sySon"></div></div></div>
       <div><div class="card"><div class="toolbar"><input type="search" id="syAra" placeholder="Listede ara…"><label class="small"><input type="checkbox" id="syFark"> Yalnızca farklılar</label><span class="small muted" id="syOzet"></span></div><div id="syTablo"></div></div></div></div>`;
+    urunAraKutu($("#syAraUrun"),u=>syBarkod({gtin:u.barkod,ham:u.barkod,ai:{},format:"Ad ile",foto:true}));
     SY.kam=new Kamera($("#syKamW"),{onBarkod:syBarkod,onBarkodsuz:syBarkodsuz,tekrarMs:3000,coklu:true});
     $("#syAra").oninput=e=>{ SY.ara=e.target.value; syTablo(); }; $("#syFark").onchange=e=>{ SY.sadeceFark=e.target.checked; syTablo(); };
   }

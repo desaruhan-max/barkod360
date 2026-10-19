@@ -2819,7 +2819,7 @@ let SKT_SEC="hepsi";
 SAYFA.skt = {
   ilk(){ $("#sktKapsam").onchange=()=>this.goster(); $("#sktUyari").onclick=()=>sktUyariGoster(true); $("#sktBildir").onclick=()=>sktBildirimIzni(); $("#sktExcel").onclick=()=>this.excel(); $("#sktYaz").onclick=()=>yazdir('<div class="rapor"><h2>STT / TETT Listesi · '+esc($("#sktKapsam").value==="tum"?"Tüm kreşler":aktifKres())+" · "+trTarih(bugun())+"</h2>"+$("#sktTablo").innerHTML+"</div>"); },
   goster(){ kresCiz(); const kres=$("#sktKapsam").value==="tum"?null:aktifKres();
-    const ls=Object.values(V.lotlar).filter(l=>(!kres||l.kres===kres)&&!l.red&&kalanOf(l.id)>0);
+    const ls=Object.values(V.lotlar).filter(l=>(!kres||l.kres===kres)&&!l.red&&kalanOf(l.id)>0&&!(!l.skt&&(V.urunler[l.barkod]||{}).tarihYok));
     const kova=l=>{ if(!l.skt) return "yok"; const g=gunFark(l.skt); return g<0?"gecti":g<=3?"3":g<=7?"7":g<=30?"30":"uzun"; };
     const say={}; ls.forEach(l=>{ const k=kova(l); say[k]=(say[k]||0)+1; });
     $("#sktKova").innerHTML=SKT_KOVA.map(([k,t])=>`<button data-k="${k}" class="${SKT_SEC===k?"on":""}">${t} (${k==="hepsi"?ls.filter(l=>kova(l)!=="uzun").length:(say[k]||0)})</button>`).join("");
@@ -2827,8 +2827,9 @@ SAYFA.skt = {
     let r=ls.filter(l=>SKT_SEC==="hepsi"?kova(l)!=="uzun":kova(l)===SKT_SEC).sort((a,b)=>(a.skt||"9999").localeCompare(b.skt||"9999")); this._r=r;
     $("#sktTablo").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Durum</th><th>STT/TETT</th><th>Ürün</th><th>Lot</th><th>Kreş</th><th class="r">Kalan</th><th class="r">Değer</th><th></th></tr></thead><tbody>
       ${r.map(l=>{ const u=V.urunler[l.barkod]||{}; const g=l.skt?gunFark(l.skt):null; return `<tr><td>${sktPill(l.skt)}</td><td><b>${l.sktTur||""}</b> ${trTarih(l.skt)}</td><td>${esc(urunAd(l.barkod))}${l.bloke?' <span class="pill bad">BLOKE</span>':""}</td><td>${esc(l.lot||"—")}</td><td class="m">${esc(KISA[l.kres])}</td><td class="r"><b>${nf(kalanOf(l.id))}</b> ${esc(u.birim||"")}</td><td class="r">${l.fiyat!=null?tl(kalanOf(l.id)*l.fiyat):""}</td>
-        <td class="act">${g!=null&&g<0?`<button class="btn sm danger" data-imha="${l.id}">İmha kaydı</button>`:`<button class="btn sm" data-oncelik="${l.id}">Çıkış</button>`}</td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bu aralıkta parti yok</div>';
+        <td class="act" style="white-space:nowrap">${!l.skt?`<button class="btn sm primary" data-tgir="${l.id}">📅 Tarih gir</button> `:`<button class="btn sm" data-tgir="${l.id}">✎</button> `}${g!=null&&g<0?`<button class="btn sm danger" data-imha="${l.id}">İmha kaydı</button>`:`<button class="btn sm" data-oncelik="${l.id}">Çıkış</button>`}</td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bu aralıkta parti yok</div>';
     $$("#sktTablo [data-imha]").forEach(b=>b.onclick=()=>imhaDlg(b.dataset.imha));
+    $$("#sktTablo [data-tgir]").forEach(b=>b.onclick=()=>lotTarihGir(b.dataset.tgir,()=>this.goster()));
     $$("#sktTablo [data-oncelik]").forEach(b=>b.onclick=()=>{ const l=V.lotlar[b.dataset.oncelik]; if(l.kres!==aktifKres()){ kresDegis(l.kres); kaydet(); } sekme("cikis"); CK.tur="CIKIS"; CK.barkod=l.barkod; CK.lotId=l.id; ckFormCiz(1); });
   },
   excel(){ const r=this._r||[]; if(!r.length){ toast("Bu aralıkta parti yok",1); return; } const tum=$("#sktKapsam").value==="tum"; const kapsam=tum?"Tüm kreşler":aktifKres();
@@ -2839,6 +2840,34 @@ SAYFA.skt = {
     rows.push([]); rows.push([{v:"Toplam "+r.length+" parti",s:XLSX_STIL.kalin}]);
     indir("stt tett takibi "+trTarih(bugun())+" "+kapsam+".xlsx",xlsxOlustur([{ad:"STT TETT",sutunlar:[6,32,16,16,14,22,9,8,7,26,30],satirlar:rows,donuk:3}])); toast("Excel dosyası indirildi (İndirilenler)"); }
 };
+// partiye tarih gir: tarih yazan yerin fotoğrafı (Claude okur) ya da elle
+function lotTarihGir(id,sonra){ const l=V.lotlar[id]; if(!l) return; const u=V.urunler[l.barkod]||{}; const yeni=[];
+  const b=dlg("Tarih gir · "+(u.ad||l.barkod),`<p class="small">${esc(u.ad||"")}${u.marka?" · "+esc(u.marka):""} · ${esc(KISA[l.kres]||l.kres)} · stok ${nf(kalanOf(l.id))} ${esc(u.birim||"")}</p>
+    <button class="btn primary big" id="tg_foto" style="width:100%">📸 Tarihin resmini çek</button><div class="small muted" id="tg_dur" style="margin:6px 0"></div>
+    <div class="chips" id="tg_tur"><button data-t="STT" class="${l.sktTur!=="TETT"?"on":""}">STT</button><button data-t="TETT" class="${l.sktTur==="TETT"?"on":""}">TETT</button></div>
+    <div class="inrow" style="gap:8px"><label class="f" style="flex:1">STT / TETT<input id="tg_skt" inputmode="numeric" value="${l.skt?trTarih(l.skt):""}" style="font-size:18px"></label><label class="f" style="flex:1">Parti no<input id="tg_lot" value="${esc(l.lot==="SAYIM"?"":(l.lot||""))}" style="font-size:16px"></label></div>
+    <div class="inrow" style="gap:8px"><label class="f" style="flex:1">Üretim tarihi<input id="tg_ut" inputmode="numeric" value="${l.ut?trTarih(l.ut):""}"></label><label class="f" style="width:100px">Saat<input id="tg_us" value="${esc(l.us||"")}"></label></div>
+    <label class="small" style="display:block;margin-top:8px"><input type="checkbox" id="tg_yok"${u.tarihYok?" checked":""}> Bu ürünün tarihi yok (folyo, streç, pişirme kağıdı gibi gıda dışı) — tarihsiz listesinde gösterme</label>
+    <p id="tg_h" class="neg" style="display:none;font-weight:700"></p>`,
+    [{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const e=$("#tg_h",b); const hata=m=>{ e.textContent="⚠ "+m; e.style.display="block"; return false; };
+      const skt=$("#tg_skt",b).value.trim()?tarihCoz($("#tg_skt",b).value):""; if(skt===null) return hata("Tarihi gg.aa.yyyy yazın");
+      const ut=$("#tg_ut",b).value.trim()?tarihCoz($("#tg_ut",b).value):""; if(ut===null) return hata("Üretim tarihini gg.aa.yyyy yazın");
+      const yok=$("#tg_yok",b).checked; if(!skt&&!yok) return hata("Tarihi yazın ya da fotoğrafını çekin");
+      if(u.barkod&&V.urunler[u.barkod]) V.urunler[u.barkod].tarihYok=yok||undefined;
+      Object.assign(l,{skt,sktTur:($("#tg_tur button.on",b)||{dataset:{t:"STT"}}).dataset.t,lot:$("#tg_lot",b).value.trim()||l.lot,ut,us:$("#tg_us",b).value.trim()});
+      if(yeni.length){ l.fotoIds=(l.fotoIds||[]).concat(yeni); }
+      kaydet(); toast(skt?"Tarih kaydedildi: "+trTarih(skt):"Tarihsiz ürün olarak işaretlendi"); sonra&&sonra(); }}]);
+  ["tg_skt","tg_ut"].forEach(x=>tarihMaske($("#"+x,b)));
+  $$("#tg_tur button",b).forEach(x=>x.onclick=()=>$$("#tg_tur button",b).forEach(y=>y.classList.toggle("on",y===x)));
+  $("#tg_foto",b).onclick=async()=>{ const f=await gorselSec(true); if(!f) return; const d=$("#tg_dur",b); d.textContent="⏳ Tarih okunuyor…";
+    try{ const bm=await createImageBitmap(f); const k=Math.min(1,2000/Math.max(bm.width,bm.height)); const c=document.createElement("canvas"); c.width=Math.round(bm.width*k); c.height=Math.round(bm.height*k); c.getContext("2d").drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close();
+      try{ yeni.push(await fotoKaydet(c,1400,.8)); }catch(_){}
+      if(!(await ClaudeOkur.kullanilabilir())){ d.textContent="Fotoğraf kaydedildi. Okuyucu kullanılamıyor; tarihi yazın."; return; }
+      const q=await ClaudeOkur.tarihOku(c);
+      if(q.skt){ $("#tg_skt",b).value=trTarih(q.skt); if(q.sktTur) $$("#tg_tur button",b).forEach(y=>y.classList.toggle("on",y.dataset.t===q.sktTur)); }
+      if(q.lot) $("#tg_lot",b).value=q.lot; if(q.ut) $("#tg_ut",b).value=trTarih(q.ut); if(q.us) $("#tg_us",b).value=q.us;
+      d.innerHTML=q.skt?"✓ Okundu: <b>"+(q.sktTur||"STT")+" "+trTarih(q.skt)+"</b> — kontrol edip Kaydet'e basın.":"Tarih okunamadı; yakından tekrar çekin ya da yazın.";
+    }catch(err){ d.textContent="Okunamadı ("+(err&&err.message||err)+"); tarihi yazın."; } }; }
 function imhaDlg(id){
   const l=V.lotlar[id], u=V.urunler[l.barkod]; const k=kalanOf(id);
   dlg("İmha kaydı",`<p><b>${esc(u.ad)}</b> · Lot ${esc(l.lot||"—")} · ${l.sktTur||"STT"} ${trTarih(l.skt)}</p><label class="f">İmha edilen miktar (${esc(u.birim)})<input id="im_m" type="number" step="any" value="${k}"></label><label class="f">Açıklama / tutanak no<input id="im_a" value="Tarihi geçti"></label>`,

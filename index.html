@@ -482,6 +482,7 @@ img[data-g],.dlg img{cursor:zoom-in}
   <div class="sec-h"><h2>İşlenmiş ürünler</h2>
     <div class="sp"><button class="btn sm primary" id="isYeni">+ İşlemeye gönder</button> <button class="btn sm" id="isExcel">Excel'e aktar</button></div></div>
   <div class="card" id="isBekleyenKart"><h3>İşlenmeyi bekleyen çiğ ürünler</h3><div id="isBekleyen"></div></div>
+  <div class="card"><h3>Çiğ kalacak ürünler</h3><div id="isCig"></div></div>
   <div class="card"><h3>İşlemde ve işlenmiş ürünler</h3><div id="isListe"></div></div>
   <div class="card"><h3>Fire</h3><div id="isFire"></div></div>
 </section>
@@ -3039,13 +3040,19 @@ SAYFA.islenmis = {
     if(a==null||b==null){ if((x.sonBirim||x.birim)!==x.birim) return null; return {m:yuvarla(x.cigMiktar-x.sonMiktar),b:x.birim,y:x.cigMiktar?(x.cigMiktar-x.sonMiktar)/x.cigMiktar*100:0}; }
     const m=yuvarla(x.cigMiktar*a-x.sonMiktar*b); return {m,b:"kg",y:x.cigMiktar?m/(x.cigMiktar*a)*100:0}; },
   notu(x){ const f=(ISLEM_TURLERI[x.islem]||ISLEM_TURLERI["Diğer"])[0]; return nf(x.cigMiktar)+" "+x.birim+" çiğ "+x.ad+", "+trTarih(x.t)+" saat "+saatSn(x.t).slice(0,5)+", "+f+" gitti; işlenmiş ürünler grubuna geçti."; },
+  cigKalsin(l){ l.islenmeyecek=true; l.cigKarar=new Date().toISOString(); kaydet(); },
+  cigKalan(){ const k=aktifKres(); return Object.values(V.lotlar).filter(l=>l.kres===k&&!l.red&&l.islenmeyecek&&kalanOf(l.id)>0&&cigEtMi(V.urunler[l.barkod])).sort((a,b)=>(b.girisTarihi||"").localeCompare(a.girisTarihi||"")); },
   bekleyen(){ const k=aktifKres(); return Object.values(V.lotlar).filter(l=>l.kres===k&&!l.red&&!l.islenmeyecek&&kalanOf(l.id)>0&&cigEtMi(V.urunler[l.barkod])).sort((a,b)=>(b.girisTarihi||"").localeCompare(a.girisTarihi||"")); },
   goster(){ kresCiz();
     if(!this.ilk){ this.ilk=true; $("#isYeni").onclick=()=>this.gonder(); $("#isExcel").onclick=()=>this.excel(); }
     const k=aktifKres(); const bk=this.bekleyen();
     $("#isBekleyen").innerHTML=bk.length?bk.map(l=>{ const u=V.urunler[l.barkod]||{}; return `<div style="border:1px solid #e3e9e6;border-radius:10px;padding:10px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px"><div><b>${esc(u.ad||l.barkod)}</b>${u.marka?' <span class="muted">· '+esc(u.marka)+"</span>":""}<div class="small muted">Geliş ${trTarih(l.girisTarihi)} · STT ${l.skt?trTarih(l.skt)+" "+sktPill(l.skt):"—"}</div></div><div style="white-space:nowrap"><b>${nf(kalanOf(l.id))}</b> ${esc(u.birim||"")}</div></div><div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm primary" style="flex:1" data-isg="${l.id}">İşlemeye gönder</button><button class="btn sm" style="flex:1" data-isc="${l.id}">Çiğ kalacak</button></div></div>`; }).join(""):'<div class="empty">'+esc(k)+' kreşinde işlenmeyi bekleyen çiğ ürün yok</div>';
     $$("[data-isg]").forEach(b=>b.onclick=()=>this.gonder({lotId:b.dataset.isg}));
-    $$("[data-isc]").forEach(b=>b.onclick=()=>{ const l=V.lotlar[b.dataset.isc]; if(l){ l.islenmeyecek=true; kaydet(); this.goster(); toast("Çiğ olarak stokta kalacak"); } });
+    $$("[data-isc]").forEach(b=>b.onclick=()=>{ const l=V.lotlar[b.dataset.isc]; if(l){ this.cigKalsin(l); this.goster(); toast("Çiğ kalacak ürünler listesine eklendi"); } });
+    const ck=this.cigKalan();
+    $("#isCig").innerHTML=ck.length?ck.map(l=>{ const u=V.urunler[l.barkod]||{}; return `<div style="border:1px solid #e3e9e6;border-left:5px solid #2f78b0;border-radius:10px;padding:10px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;gap:8px"><div><b>${esc(u.ad||l.barkod)}</b>${u.marka?' <span class="muted">· '+esc(u.marka)+"</span>":""} <span class="pill" style="background:#e6eff7;color:#1d4f7a">çiğ kalacak</span><div class="small" style="margin-top:3px">📝 ${nf(kalanOf(l.id))} ${esc(u.birim||"")} ${esc(u.ad||"")} çiğ olarak stokta kalacak${l.cigKarar?" (karar: "+trTarih(new Date(l.cigKarar).toLocaleDateString("sv"))+" "+saatSn(l.cigKarar).slice(0,5)+")":""}.</div><div class="small muted">Geliş ${trTarih(l.girisTarihi)} · STT ${l.skt?trTarih(l.skt)+" "+sktPill(l.skt):"—"}</div></div><div style="white-space:nowrap"><b>${nf(kalanOf(l.id))}</b> ${esc(u.birim||"")}</div></div><div style="display:flex;gap:6px;margin-top:8px"><button class="btn sm" style="flex:1" data-isg="${l.id}">İşlemeye gönder</button><button class="btn sm" style="flex:1" data-isgeri="${l.id}">Geri al (bekleyenlere)</button></div></div>`; }).join(""):'<div class="empty">Çiğ kalacak olarak işaretlenen ürün yok</div>';
+    $$("[data-isg]").forEach(b=>b.onclick=()=>this.gonder({lotId:b.dataset.isg}));
+    $$("[data-isgeri]").forEach(b=>b.onclick=()=>{ const l=V.lotlar[b.dataset.isgeri]; if(l){ delete l.islenmeyecek; delete l.cigKarar; kaydet(); this.goster(); toast("İşlenmeyi bekleyenlere geri alındı"); } });
     const r=this.liste_().filter(x=>x.kres===k).sort((a,b)=>(b.t||"").localeCompare(a.t||""));
     $("#isListe").innerHTML=r.length?r.map(x=>{ const f=this.fire(x);
       return `<div class="card" style="margin:0 0 10px;padding:12px;border-left:5px solid ${x.durum==="islendi"?"#1b6b52":"#c98a2e"}">
@@ -3070,7 +3077,7 @@ SAYFA.islenmis = {
   // mal kabulde çiğ et kaydedilince sor
   sor(lotId){ const l=V.lotlar[lotId]; if(!l) return; const u=V.urunler[l.barkod]||{};
     dlg("Ürün işlenecek mi?",`<p><b>${esc(u.ad||l.barkod)}</b> geldi (${nf(kalanOf(l.id))} ${esc(u.birim||"")}).</p><p>Bu ürün haşlanacak, kavrulacak ya da pişirilecek mi?</p><p class="hint">“Daha sonra” derseniz İşlenmiş Ürünler bölümünde “işlenmeyi bekleyen” listesinde durur.</p>`,
-      [{t:"Hayır, çiğ kalacak",f:()=>{ l.islenmeyecek=true; kaydet(); }},{t:"Daha sonra"},{t:"Evet, işlemeye gönder",c:"primary",f:()=>{ setTimeout(()=>this.gonder({lotId}),30); }}]); },
+      [{t:"Hayır, çiğ kalacak",f:()=>{ this.cigKalsin(l); if(AKTIF_SEKME==="islenmis") this.goster(); }},{t:"Daha sonra"},{t:"Evet, işlemeye gönder",c:"primary",f:()=>{ setTimeout(()=>this.gonder({lotId}),30); }}]); },
   formHtml(x){ const k=x.kres||aktifKres();
     const urs=[...new Set(Object.values(V.lotlar).filter(l=>l.kres===k&&kalanOf(l.id)>0).map(l=>l.barkod))].map(b=>V.urunler[b]).filter(Boolean)
       .sort((a,b)=>(cigEtMi(b)-cigEtMi(a))||a.ad.localeCompare(b.ad,"tr"));

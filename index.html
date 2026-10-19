@@ -3051,7 +3051,8 @@ SAYFA.islenmis = {
   planHtml(l){ const p=l.plan||{}; const u=V.urunler[l.barkod]||{}; const kiyma=/kıyma|kiyma/i.test(u.ad||"");
     const parts=[]; if(p.pisirme) parts.push(trTarih(p.pisirme)+(p.ogun?" "+p.ogun.toLocaleLowerCase("tr")+" menüsünde":"")+" "+(p.amac||"pişirilecek")+(p.amac?" yapılacak":""));
     if(p.hazirlik) parts.push("hazırlık "+trTarih(p.hazirlik));
-    const sak=p.saklama?SAKLAMA[p.saklama]:""; const uyar=kiyma&&p.saklama==="soguk"?' <span class="neg" style="font-weight:700">⚠ Çiğ kıyma +4 °C’de bekletilmemeli</span>':(!p.saklama?' <span class="neg" style="font-weight:700">⚠ Saklama koşulu seçilmedi</span>':"");
+    const sak=p.saklama?SAKLAMA[p.saklama]:""; const ilk=p.hazirlik||p.pisirme; const gun=ilk?Math.max(0,Math.round((new Date(ilk)-new Date((l.girisTarihi||bugun())))/864e5)):null;
+    const uyar=p.saklama==="soguk"&&gun!=null?' <span class="muted">('+(gun?gun+" gün":"aynı gün")+" bekleyecek)</span>"+(l.skt&&ilk>l.skt?' <span class="neg" style="font-weight:700">⚠ STT’den sonra</span>':""):(!p.saklama?' <span class="neg" style="font-weight:700">⚠ Saklama koşulu seçilmedi</span>':"");
     return `<div class="small" style="margin-top:4px">📅 <b>${esc(parts.join(" · ")||"Plan")}</b></div><div class="small">Bekletme: ${esc(sak||"—")}${uyar}</div>${p.neden?`<div class="small muted">Neden: ${esc(p.neden)}</div>`:""}`; },
   planla(lotId){ const l=V.lotlar[lotId]; if(!l) return; const p=l.plan||{}; const u=V.urunler[l.barkod]||{}; const kiyma=/kıyma|kiyma/i.test(u.ad||"");
     const b=dlg("Bekletme planı · "+(u.ad||""),`<p class="small">Bu ürün neden ve ne zamana kadar çiğ bekletiliyor?</p>
@@ -3070,7 +3071,6 @@ SAYFA.islenmis = {
           delete l.islenmeyecek; delete l.cigKarar; kaydet(); if(AKTIF_SEKME==="islenmis") this.goster(); else if(AKTIF_SEKME==="konsol") SAYFA.konsol.goster(); toast("Bekletme planı kaydedildi"); }}]);
     tarihMaske($("#pl_h",b)); tarihMaske($("#pl_p",b));
     const uy=()=>{ const e=$("#pl_u",b); const v=$("#pl_s",b).value; let m="";
-      if(kiyma&&v==="soguk") m="⚠ Çiğ kıyma +4 °C’de bekletilmemeli. Pişirme gününe kadar bekleyecekse dondurun ve “Donuk” seçin.";
       const pis=tarihCoz($("#pl_p",b).value); if(!m&&pis&&l.skt&&pis>l.skt) m="⚠ Pişirme günü STT’den ("+trTarih(l.skt)+") sonra.";
       e.textContent=m; e.style.display=m?"block":"none"; };
     ["pl_s","pl_p"].forEach(id=>{ $("#"+id,b).addEventListener("change",uy); $("#"+id,b).addEventListener("input",uy); }); uy(); },

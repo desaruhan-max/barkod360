@@ -971,7 +971,14 @@ document.addEventListener("click",e=>{ const i=e.target.closest&&e.target.closes
 function belgeDugmeleri(rec, attr){ const ids=(rec&&rec.belgeIds)||[]; return ids.map((id,i)=>`<button type="button" class="btn sm" ${attr}="${esc(id)}">📷 Belge${ids.length>1?" "+(i+1):""}</button>`).join(" "); }
 async function belgeAc(rec,id){ const d=await fotoAl(id,rec); if(d) resimBuyut(d); else toast("Belge açılamadı (internet gerekli olabilir)",1); }
 function gorselYukle(kap){ $$("img[data-g]",kap||document).forEach(i=>{ const u=V.urunler[i.dataset.g]; urunGorsel(u).then(d=>{ if(d){ i.src=d; i.style.visibility="visible"; i.style.display=""; } }); }); }
-function gorselSec(kamera){ return new Promise(res=>{ const i=document.createElement("input"); i.type="file"; i.accept="image/*"; if(kamera) i.capture="environment"; i.onchange=()=>res(i.files[0]||null); i.click(); }); }
+// Telefonun kendi kamerası açılırken canlı barkod kamerasını kapat (ikisi aynı anda kamerayı kullanamaz); dönünce yeniden aç
+let FOTO_CEKILIYOR=0, FOTO_SONRA_AC=null;
+function fotoOncesi(){ FOTO_CEKILIYOR=Date.now(); if(AKTIF_KAMERA&&AKTIF_KAMERA.akis){ FOTO_SONRA_AC=AKTIF_KAMERA; AKTIF_KAMERA.kapat(); } }
+function fotoSonrasi(){ setTimeout(()=>{ FOTO_CEKILIYOR=0; const k=FOTO_SONRA_AC; FOTO_SONRA_AC=null; if(k&&!AKTIF_KAMERA&&document.body.contains(k.kap)) k.ac(); },900); }
+document.addEventListener("click",e=>{ const t=e.target; const inp=t&&(t.matches&&t.matches('input[type="file"]')?t:(t.closest&&t.closest("label")&&t.closest("label").querySelector('input[type="file"]'))); if(inp){ fotoOncesi(); inp.addEventListener("change",fotoSonrasi,{once:true}); } },true);
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&FOTO_CEKILIYOR&&Date.now()-FOTO_CEKILIYOR>1500) fotoSonrasi(); });
+window.addEventListener("focus",()=>{ if(FOTO_CEKILIYOR&&Date.now()-FOTO_CEKILIYOR>1500) fotoSonrasi(); }); // fotoğraftan vazgeçildiyse
+function gorselSec(kamera){ fotoOncesi(); return new Promise(res=>{ const i=document.createElement("input"); i.type="file"; i.accept="image/*"; if(kamera) i.capture="environment"; i.onchange=()=>{ fotoSonrasi(); res(i.files[0]||null); }; i.click(); }); }
 async function urunGorselDegistir(barkod, kamera){
   const f=await gorselSec(kamera); if(!f) return false;
   try{ const id=await gorselKaydet(f); const u=V.urunler[barkod]; if(!u) return false; u.gorselId=id; kaydet(); toast("Ürün görseli kaydedildi"); return true; }catch(e){ toast("Görsel kaydedilemedi: "+e.message,1); return false; }
@@ -1545,7 +1552,8 @@ class Kamera{
       // görüntü donduysa (telefonun kendi kamerası açılıp kapandıktan sonra olur) kamerayı yeniden başlat
       const tr=this.iz; const ct=this._kareSay!=null?this._kareSay:this.v.currentTime;
       if(ct!==sonZaman){ sonZaman=ct; donuk=Date.now(); }
-      if(!document.hidden && (!tr || tr.readyState!=="live" || Date.now()-donuk>2500)){ this.yenidenBaslat("görüntü dondu"); return; }
+      if(FOTO_CEKILIYOR){ donuk=Date.now(); }
+      else if(!document.hidden && (!tr || tr.readyState!=="live" || Date.now()-donuk>2500)){ this.yenidenBaslat("görüntü dondu"); return; }
       try{ const c=this._n%2?this.orta():this.kare(1280);
         if(c){ const id=c.getContext("2d").getImageData(0,0,c.width,c.height);
           // okuyucu takılırsa en fazla 3 sn bekle
@@ -1565,7 +1573,7 @@ class Kamera{
     if(Date.now()-k.bas<45000 || Date.now()-k.son<600000 || typeof taniKaydet!=="function") return; k.son=Date.now(); k.bas=Date.now();
     try{ const v=this.v, tr=this.iz; const st=(tr&&tr.getSettings&&tr.getSettings())||{};
       const c=this.kare(1280); taniKaydet({t:new Date().toISOString(),olay:"kamera",bilgi:this.bilgi||"",izDurum:tr&&tr.readyState,muted:tr&&tr.muted,video:[v.videoWidth,v.videoHeight,v.readyState,v.paused,Math.round(v.currentTime)],ayar:{w:st.width,h:st.height,zoom:st.zoom,odak:st.focusMode},kare:this._n,sonHata:String(this._sonHata||""),yedek:Barkod.yedek,bd:"BarcodeDetector" in window,yb:this._ybSay||0,bellek:performance.memory?Math.round(performance.memory.usedJSHeapSize/1e6)+"MB":""},c); }catch(e){ console.warn(e); } }
-  yenidenBaslat(neden){ this._ybSay=(this._ybSay||0)+1; if(this._yb && Date.now()-this._yb<4000) return; this._yb=Date.now(); console.warn("kamera yeniden:",neden); this.durum("Kamera yeniden açılıyor…"); setTimeout(()=>{ if(AKTIF_KAMERA===this||!AKTIF_KAMERA) this.ac(); },300); }
+  yenidenBaslat(neden){ if(FOTO_CEKILIYOR) return; this._ybSay=(this._ybSay||0)+1; if(this._yb && Date.now()-this._yb<4000) return; this._yb=Date.now(); console.warn("kamera yeniden:",neden); this.durum("Kamera yeniden açılıyor…"); setTimeout(()=>{ if(AKTIF_KAMERA===this||!AKTIF_KAMERA) this.ac(); },300); }
   sonuc(liste){
     this._sonOkuma=Date.now(); const simdi=Date.now(), bekle=this.o.tekrarMs||1600; const yeni=[];
     for(const x of liste){ if(!x.isValid) continue; const k=x.text; if(this.son[k] && simdi-this.son[k]<bekle){ this.son[k]=simdi; continue; } this.son[k]=simdi; yeni.push(barkodCoz(x.text,x.format)); }

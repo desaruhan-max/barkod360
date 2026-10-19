@@ -321,7 +321,7 @@ img[data-g],.dlg img{cursor:zoom-in}
     <div class="sp"><button class="btn sm" id="kbTemizle">Formu temizle</button></div></div>
   <div class="grid2">
     <div>
-      <div class="card sticky">
+      <div class="card">
         <h3>1 · Barkod</h3>
         <p class="hint">Kamerayı açıp barkodu çerçeveye tutun ya da barkodun fotoğrafını çekin. Okununca bip sesi gelir.</p>
         <div id="kbKamera"></div>
@@ -332,7 +332,6 @@ img[data-g],.dlg img{cursor:zoom-in}
             <label class="f" style="margin:0">ya da tarihi yazın (gün ay yıl, ör. <b>150327</b>)<input id="kbHt" inputmode="numeric" autocomplete="off" maxlength="10" placeholder="GG AA YY"></label></div>
           <div class="small muted" id="kbOkuyucu"></div></div>
       </div>
-      <div class="card"><h3>Bugünkü kabuller</h3><div id="kbBugun"></div></div>
     </div>
     <div>
       <div class="card" id="kbForm">
@@ -411,6 +410,7 @@ img[data-g],.dlg img{cursor:zoom-in}
       </div>
     </div>
   </div>
+  <div class="card" style="margin-top:14px"><div class="toolbar"><h3 style="margin:0;flex:1">Girilen mal kabuller</h3><div class="chips" id="kbAralik"><button data-g="0" class="on">Bugün</button><button data-g="7">Son 7 gün</button><button data-g="30">Son 30 gün</button><button data-g="9999">Tümü</button></div></div><div id="kbBugun"></div></div>
 </section>
 
 <!-- ============ ÇIKIŞ ============ -->
@@ -1979,11 +1979,14 @@ async function kbKaydet(sessiz){
   if(karar!=="RED" && cigEtMi(u) && !lot.islenmeyecek) setTimeout(()=>SAYFA.islenmis.sor(lot.id),500); // çiğ et geldi: işlenecek mi?
   return true;
 }
+let KB_ARALIK=0;
 function kbBugunCiz(){
-  const k=aktifKres(), bg=bugun();
-  const hs=V.hareketler.filter(h=>h.kres===k&&(h.tur==="GIRIS"||h.tur==="RED")&&h.t.slice(0,10)===bg).slice().reverse();
-  $("#kbBugun").innerHTML=hs.length?`<div class="tw" style="max-height:340px"><table class="rt"><thead><tr><th>Ürün</th><th>Lot / STT</th><th class="r">Miktar</th><th></th></tr></thead><tbody>${hs.map(h=>{ const l=V.lotlar[h.lotId]||{}; const u=V.urunler[h.barkod]||{};
-    return `<tr><td>${esc(urunAd(h.barkod))}${h.tur==="RED"?' <span class="pill bad">RED</span>':""}${h.tersId?' <span class="pill gh">iptal</span>':""}</td><td class="m">${esc(l.lot||"—")}<br>${trTarih(l.skt)}</td><td class="r">${nf(h.kayitMiktar??h.miktar)} ${esc(u.birim||"")}</td><td class="act">${!h.tersId&&h.tur==="GIRIS"?`<button class="ib" title="İptal (ters kayıt)" data-ters="${h.id}">↺</button>`:""}</td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bugün kabul yok</div>';
+  const k=aktifKres(), bg=bugun(), bas=KB_ARALIK?gunEkle(bg,-KB_ARALIK):bg; const yerel=t=>new Date(t).toLocaleDateString("sv");
+  const ar=$("#kbAralik"); if(ar&&!ar._b){ ar._b=1; $$("button",ar).forEach(b=>b.onclick=()=>{ KB_ARALIK=+b.dataset.g; $$("button",ar).forEach(x=>x.classList.toggle("on",x===b)); kbBugunCiz(); }); }
+  const hs=V.hareketler.filter(h=>h.kres===k&&(h.tur==="GIRIS"||h.tur==="RED")&&yerel(h.t)>=bas).slice().sort((a,b)=>b.t.localeCompare(a.t));
+  const top=hs.filter(h=>h.tur==="GIRIS"&&!h.tersId).length;
+  $("#kbBugun").innerHTML=hs.length?`<div class="small muted" style="margin-bottom:6px">${top} kabul${hs.length-top?" · "+(hs.length-top)+" red/iptal":""}</div><div class="tw" style="max-height:520px"><table class="rt"><thead><tr><th>Tarih</th><th>Ürün</th><th class="r">Miktar</th><th>Parti / STT</th><th>Tedarikçi</th><th></th></tr></thead><tbody>${hs.map(h=>{ const l=V.lotlar[h.lotId]||{}; const u=V.urunler[h.barkod]||{};
+    return `<tr><td class="m">${trTarih(yerel(h.t))}<br><span class="muted">${saatSn(h.t).slice(0,5)}</span></td><td>${esc(urunAd(h.barkod))}${h.tur==="RED"?' <span class="pill bad">RED</span>':""}${h.tersId?' <span class="pill gh">iptal</span>':""}</td><td class="r" style="white-space:nowrap"><b>${nf(h.kayitMiktar??h.miktar)}</b> ${esc(u.birim||"")}</td><td class="m">${esc(l.lot||"—")}<br>${l.skt?(l.sktTur||"STT")+" "+trTarih(l.skt):"tarih yok"}</td><td class="m">${esc(l.ted||"—")}</td><td class="act">${!h.tersId&&h.tur==="GIRIS"?`<button class="ib" title="İptal (ters kayıt)" data-ters="${h.id}">↺</button>`:""}</td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">'+(KB_ARALIK?"Bu aralıkta":"Bugün")+' kabul yok</div>';
   $$("#kbBugun [data-ters]").forEach(b=>b.onclick=()=>tersKayit(b.dataset.ters));
 }
 SAYFA.kabul = {

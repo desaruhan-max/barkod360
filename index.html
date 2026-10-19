@@ -1065,6 +1065,8 @@ const Barkod = {
     if(r.error) throw new Error(r.error);
     return r.svg.replace(/<\?xml[^>]*>\s*/,"").replace(/<!DOCTYPE[^>]*>\s*/,"").replace(/<svg width="(\d+(?:\.\d+)?)" height="(\d+(?:\.\d+)?)"/,'<svg viewBox="0 0 $1 $2" preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges"'); }
 };
+// bilgisayar/telefon/cihaz üzerindeki destek-seri no QR kodları (örn. Lenovo laptop etiketi) ürün barkodu sayılmaz
+function cihazQR(t){ t=String(t||""); return /^https?:\/\//i.test(t) && /lenovo|\bhp\.com|dell\.com|samsung\.com|apple\.com|asus\.com|acer\.com|microsoft\.com|xiaomi|huawei|msi\.com|toshiba|dynabook|support\.|warranty|[?&](sn|serial|serialnumber)=/i.test(t); }
 function kontrolHanesi(govde){ let t=0; const d=govde.split("").reverse(); for(let i=0;i<d.length;i++) t+= (+d[i])*(i%2===0?3:1); return (10-(t%10))%10; }
 function gtinGecerli(s){ return /^\d{8}$|^\d{12,14}$/.test(s) && kontrolHanesi(s.slice(0,-1))===+s.slice(-1); }
 function ulke(g){
@@ -1593,12 +1595,12 @@ class Kamera{
   yenidenBaslat(neden){ if(FOTO_CEKILIYOR) return; this._ybSay=(this._ybSay||0)+1; if(this._yb && Date.now()-this._yb<4000) return; this._yb=Date.now(); console.warn("kamera yeniden:",neden); this.durum("Kamera yeniden açılıyor…"); setTimeout(()=>{ if(AKTIF_KAMERA===this||!AKTIF_KAMERA) this.ac(); },300); }
   sonuc(liste){
     this._sonOkuma=Date.now(); const simdi=Date.now(), bekle=this.o.tekrarMs||1600; const yeni=[];
-    for(const x of liste){ if(!x.isValid) continue; const k=x.text; if(this.son[k] && simdi-this.son[k]<bekle){ this.son[k]=simdi; continue; } this.son[k]=simdi; yeni.push(barkodCoz(x.text,x.format)); }
+    for(const x of liste){ if(!x.isValid) continue; const k=x.text; if(cihazQR(k)) continue; /* laptop/telefon seri no QR'ı ürün değildir */ if(this.son[k] && simdi-this.son[k]<bekle){ this.son[k]=simdi; continue; } this.son[k]=simdi; yeni.push(barkodCoz(x.text,x.format)); }
     if(!yeni.length) return;
     this.camEl.classList.add("okundu-flas"); setTimeout(()=>this.camEl.classList.remove("okundu-flas"),250);
     this.bildir(yeni);
   }
-  async bildir(liste, foto){ // GS1 lot etiketi + aynı ürünün EAN'ı birlikte okunduysa birleştir
+  async bildir(liste, foto){ liste=liste.filter(a=>!cihazQR(a.ham||a.text||"")); if(!liste.length){ this.durum("Cihaz etiketi (seri no QR) okundu, yok sayıldı"); return; } // GS1 lot etiketi + aynı ürünün EAN'ı birlikte okunduysa birleştir
     if(liste.length>1 && !this.o.coklu){ const gs=liste.find(x=>Object.keys(x.ai).length); if(gs){ liste=[gs]; } else liste=[liste[0]]; }
     for(const a of liste){ a.foto=!!foto; bip(a.gecerli!==false); this.durum((a.format||"")+" · "+a.ham); if(this.o.onBarkod) await this.o.onBarkod(a); }
   }

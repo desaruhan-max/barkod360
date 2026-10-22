@@ -674,7 +674,7 @@ const ALERJENLER = ["Gluten","Kabuklular","Yumurta","Balık","Yer fıstığı","
 const TURLER = {
   GIRIS:{ad:"Mal kabul (giriş)",y:+1}, TRANSFER_GIRIS:{ad:"Transfer girişi",y:+1},
   CIKIS:{ad:"Mutfağa çıkış",y:-1}, FIRE:{ad:"Fire",y:-1}, IMHA:{ad:"İmha (STT geçti / bozuk)",y:-1},
-  IADE:{ad:"Tedarikçiye iade",y:-1}, ISLEME:{ad:"İşlemeye gönderildi (pişirme)",y:-1}, TRANSFER_CIKIS:{ad:"Başka kreşe transfer",y:-1},
+  IADE:{ad:"Tedarikçiye iade",y:-1}, ISLEME:{ad:"İşlemeye gönderildi (pişirme)",y:-1}, ISLENMIS_GIRIS:{ad:"İşlenmiş ürün girişi (kreşte pişirildi)",y:+1}, TRANSFER_CIKIS:{ad:"Başka kreşe transfer",y:-1},
   SAYIM:{ad:"Sayım farkı",y:0}, RED:{ad:"Red (stoğa girmedi)",y:0}, TERS:{ad:"Ters kayıt (düzeltme)",y:0}
 };
 const CIKIS_TURLERI = ["CIKIS","FIRE","IMHA","IADE","TRANSFER_CIKIS","ISLEME"];
@@ -2823,7 +2823,7 @@ function stokSatirlari(kapsam){
   const syG={}; for(const k of (V.sayimlar||[])){ if(k.grup) syG[k.grup]=k; for(const e of (k.ekler||[])) if(e.grup) syG[e.grup]=k; }
   const ilkH={}; for(const h of V.hareketler){ if(!h.lotId||!(h.miktar>0)) continue; if(!ilkH[h.lotId]||h.t<ilkH[h.lotId].t) ilkH[h.lotId]=h; }
   const kaynak=l=>{ const h=ilkH[l.id]; const t=trTarih(l.girisTarihi||(h&&h.t)||"").slice(0,5);
-    if(h&&h.tur==="GIRIS") return "📦 Mal kabul "+t; if(h&&h.tur==="TRANSFER_GIRIS"){ const n=(l.not||"").replace(/^(Sevk|Transfer):\s*/,""); return "🚚 Sevk"+(n?" ("+(KISA[n]||n)+")":"")+" "+t; }
+    if(h&&h.tur==="GIRIS") return "📦 Mal kabul "+t; if(h&&h.tur==="ISLENMIS_GIRIS") return "🍲 İşlenmiş "+t; if(h&&h.tur==="TRANSFER_GIRIS"){ const n=(l.not||"").replace(/^(Sevk|Transfer):\s*/,""); return "🚚 Sevk"+(n?" ("+(KISA[n]||n)+")":"")+" "+t; }
     if(h&&h.grup&&syG[h.grup]) return "📋 Sayım "+trTarih(sayimTarih(syG[h.grup])).slice(0,5);
     return "📋 Sayım "+t; };
   for(const l of Object.values(V.lotlar)){ if(kres&&l.kres!==kres) continue; const k=kalanOf(l.id); if(l.red) continue;
@@ -3394,7 +3394,7 @@ SAYFA.islenmis = {
           <div style="flex:1;min-width:200px">
             <div><b>${esc(x.durum==="islendi"?(x.sonAd||x.ad):x.ad)}</b> ${x.durum==="islendi"?'<span class="pill ok">✓ işlendi</span>':'<span class="pill" style="background:#FBF2E2;color:#A8701F">işlemde</span>'}</div>
             <div class="small" style="margin-top:3px">📝 ${esc(this.notu(x))}</div>
-            ${x.durum==="islendi"?`<div class="small" style="margin-top:3px">İşlendikten sonra: <b>${nf(x.sonMiktar)} ${esc(x.sonBirim||x.birim)}</b>${x.bitis?" · "+trTarih(x.bitis)+" "+saatSn(x.bitis).slice(0,5):""}${f?` · Fire: <b class="neg">${nf(f.m,3)} ${esc(f.b)}</b> (%${nf(f.y,1)})`:""}</div>`:""}
+            ${x.durum==="islendi"?`<div class="small" style="margin-top:3px">İşlendikten sonra: <b>${nf(x.sonMiktar)} ${esc(x.sonBirim||x.birim)}</b>${x.bitis?" · "+trTarih(x.bitis)+" "+saatSn(x.bitis).slice(0,5):""}${f?` · Fire: <b class="neg">${nf(f.m,3)} ${esc(f.b)}</b> (%${nf(f.y,1)})`:""}</div>${x.sonLotId&&V.lotlar[x.sonLotId]?`<div class="small" style="margin-top:3px">🍲 Stokta kalan: <b>${nf(kalanOf(x.sonLotId),3)} ${esc(x.sonBirim||x.birim)}</b> <span class="muted">(reçetelerden düşülür)</span></div>`:(x.stokaGir===false?'<div class="small muted">Stoğa girilmedi</div>':"")}`:""}
             ${x.not?`<div class="small muted" style="margin-top:3px">${esc(x.not)}</div>`:""}
           </div>
           <div class="act" style="display:flex;gap:6px;flex-wrap:wrap">${x.durum!=="islendi"?`<button class="btn sm primary" data-ist="${x.id}">İşlendi · miktarı yaz</button>`:""}<button class="btn sm" data-isd="${x.id}">✎ Düzelt</button><button class="btn sm danger" data-iss="${x.id}">Sil</button></div>
@@ -3436,6 +3436,18 @@ SAYFA.islenmis = {
       hareketEkle({t:x.t,tur:"ISLEME",kres:x.kres,barkod:x.barkod,lotId:l.id,miktar:-al,fiyat:l.fiyat,ack:notu,islemId:x.id}); if(!x.lotId) x.lotId=l.id; }
     V.hareketler.sort((a,b)=>a.t.localeCompare(b.t)); hesapla(); return ""; },
   geriAl(x){ V.hareketler=V.hareketler.filter(h=>h.islemId!==x.id); hesapla(); },
+  // İşlendikten sonraki miktar stoğa girer (ayrı kart: "Haşlanmış Dana Kuşbaşı" vb.) → reçetelerden düşülebilir
+  girisYaz(x){ V.hareketler=V.hareketler.filter(h=>!(h.islemId===x.id&&h.tur==="ISLENMIS_GIRIS"));
+    if(x.durum!=="islendi"||!(x.sonMiktar>0)||x.stokaGir===false){ hesapla(); return; }
+    const ad=x.sonAd||x.ad, br=x.sonBirim||x.birim||"kg"; let u=x.sonBarkod&&V.urunler[x.sonBarkod];
+    if(!u) u=Object.values(V.urunler).find(z=>z.islenmis&&katla(z.ad)===katla(ad)&&z.birim===br);
+    if(!u){ let kod; do{ const g="20"+String(Math.floor(Math.random()*1e10)).padStart(10,"0"); kod=g+kontrolHanesi(g); }while(V.urunler[kod]); const c=V.urunler[x.barkod]||{};
+      u=V.urunler[kod]={barkod:kod,ad,marka:x.marka||"",barkodsuz:true,islenmis:true,birim:br,grup:c.grup||"Et, Tavuk ve Balık",saklama:"soguk",alerjen:c.alerjen||[],uretici:"(kreş mutfağında işlendi)",olusturma:new Date().toISOString(),son:{}}; }
+    x.sonBarkod=u.barkod; const gun=x.bitis?new Date(x.bitis).toLocaleDateString("sv"):bugun();
+    let l=x.sonLotId&&V.lotlar[x.sonLotId]; if(!l){ const id=uid("l"); l=V.lotlar[id]={id,kres:x.kres,barkod:u.barkod,lot:"",skt:"",sktTur:"STT",girisTarihi:gun,fiyat:null,not:"İşlenmiş ürün ("+(x.islem||"")+")",islemId:x.id,fotoIds:[]}; x.sonLotId=id; }
+    else Object.assign(l,{kres:x.kres,barkod:u.barkod,girisTarihi:gun});
+    hareketEkle({t:x.bitis||new Date().toISOString(),tur:"ISLENMIS_GIRIS",kres:x.kres,barkod:u.barkod,lotId:l.id,miktar:x.sonMiktar,fiyat:null,ack:"İşlenmiş ürün girişi · "+(x.sonMiktar)+" "+br+" "+ad+" ("+nf(x.cigMiktar)+" "+x.birim+" çiğ "+x.ad+")",islemId:x.id});
+    V.hareketler.sort((a,b)=>a.t.localeCompare(b.t)); hesapla(); },
   gonder(on={}){ const l=on.lotId&&V.lotlar[on.lotId]; const u=l&&V.urunler[l.barkod];
     const x={kres:aktifKres(),barkod:l?l.barkod:"",cigMiktar:l?kalanOf(l.id):"",birim:u?(u.birim||"kg"):"kg"};
     const b=dlg("İşlemeye gönder",this.formHtml(x)+'<p class="hint">Çiğ ürün stoktan düşer, işlenmiş ürünler bölümüne geçer. İşlendikten sonra “İşlendi · miktarı yaz” ile pişmiş miktarı yazın; fire kendiliğinden hesaplanır.</p>',
@@ -3452,6 +3464,7 @@ SAYFA.islenmis = {
       <div class="inrow" style="gap:8px"><label class="f" style="flex:1">İşlendikten sonraki miktar<input id="is_sm" type="number" min="0" step="any" inputmode="decimal" value="${x.sonMiktar??""}" style="font-size:20px"></label><label class="f" style="width:100px">Birim<select id="is_sb">${["kg","g","adet","lt","porsiyon"].map(b=>`<option${b===(x.sonBirim||x.birim)?" selected":""}>${b}</option>`).join("")}</select></label></div>
       <div class="inrow" style="gap:8px"><label class="f" style="flex:1">Bitiş tarihi<input id="is_bt" inputmode="numeric" value="${trTarih(x.bitis?new Date(x.bitis).toLocaleDateString("sv"):bugun())}"></label><label class="f" style="width:110px">Saat<input id="is_bs" type="time" value="${x.bitis?saatSn(x.bitis).slice(0,5):simdiSaat()}"></label></div>
       <div style="margin:6px 0"><button type="button" class="btn sm" id="is_foto">📷 Görsel yükle</button> <span class="small muted" id="is_fotoD">${(x.fotoIds||[]).length?(x.fotoIds.length+" görsel var"):""}</span></div>
+      <label class="small" style="display:flex;gap:6px;align-items:center;margin:6px 0"><input type="checkbox" id="is_sg"${x.stokaGir===false?"":" checked"}> İşlenmiş miktar stoğa girsin (reçetelerden düşülebilsin)</label>
       <p id="is_fire" style="font-weight:700"></p><p id="is_h2" class="neg" style="display:none;font-weight:700"></p>`; },
   sonucBagla(b,x,yeni){ tarihMaske($("#is_bt",b)); const hes=()=>{ const t={...x,durum:"islendi",sonMiktar:+$("#is_sm",b).value,sonBirim:$("#is_sb",b).value}; const e=$("#is_fire",b);
       if($("#is_sm",b).value===""){ e.textContent=""; return; } const f=this.fire(t); e.innerHTML=f?(f.m>=0?`Fire: <span class="neg">${nf(f.m,3)} ${esc(f.b)}</span> (%${nf(f.y,1)})`:`Miktar arttı: +${nf(-f.m,3)} ${esc(f.b)} (fire yok)`):'<span class="muted">Birimler farklı olduğu için fire hesaplanamıyor</span>'; };
@@ -3459,7 +3472,7 @@ SAYFA.islenmis = {
     $("#is_foto",b).onclick=async()=>{ const f=await gorselSec(true); if(!f) return; try{ const id=await gorselKaydet(f); yeni.push(id); $("#is_fotoD",b).textContent=((x.fotoIds||[]).length+yeni.length)+" görsel var ✓"; }catch(e){ toast("Görsel kaydedilemedi: "+e.message,1); } }; },
   sonucOku(b,x,yeni){ const sm=$("#is_sm",b).value; if(sm===""||!(+sm>=0)) return "İşlendikten sonraki miktarı yazın"; const bt=tarihCoz($("#is_bt",b).value); if(!bt) return "Bitiş tarihini yazın";
     Object.assign(x,{durum:"islendi",sonAd:$("#is_ad",b).value.trim()||x.ad,sonMiktar:+sm,sonBirim:$("#is_sb",b).value,bitis:yerelISO(bt,$("#is_bs",b).value||"00:00")});
-    if(yeni.length) x.fotoIds=(x.fotoIds||[]).concat(yeni); const f=this.fire(x); x.fire=f?f.m:null; x.fireBirim=f?f.b:null; return ""; },
+    if(yeni.length) x.fotoIds=(x.fotoIds||[]).concat(yeni); const f=this.fire(x); x.fire=f?f.m:null; x.fireBirim=f?f.b:null; const sg=$("#is_sg",b); if(sg) x.stokaGir=sg.checked; this.girisYaz(x); return ""; },
   tamamla(id){ const x=this.liste_().find(z=>z.id===id); if(!x) return; const yeni=[];
     const b=dlg("İşlendi · miktarı yaz",this.sonucHtml(x),[{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const h=this.sonucOku(b,x,yeni); if(h){ const e=$("#is_h2",b); e.textContent="⚠ "+h; e.style.display="block"; return false; } kaydet(); this.goster(); toast("İşlenmiş ürün kaydedildi"+(x.fire!=null?" · fire "+nf(x.fire,3)+" "+x.fireBirim:"")); }}]);
     this.sonucBagla(b,x,yeni); },
@@ -3473,7 +3486,8 @@ SAYFA.islenmis = {
         x.ack=this.notu(x); V.hareketler.filter(z=>z.islemId===x.id).forEach(z=>z.ack=x.ack); kaydet(); this.goster(); toast("Düzeltildi"); }}]);
     tarihMaske($("#is_t",b)); if(x.durum==="islendi") this.sonucBagla(b,x,yeni); },
   async sil(id){ const x=this.liste_().find(z=>z.id===id); if(!x) return;
-    if(!await onayla("Bu kayıt silinsin mi? Çiğ ürün ("+nf(x.cigMiktar)+" "+x.birim+" "+x.ad+") stoğa geri döner.","Sil")) return;
+    const kul=x.sonLotId?V.hareketler.filter(h=>h.lotId===x.sonLotId&&h.miktar<0).reduce((t,h)=>t-h.miktar,0):0;
+    if(!await onayla("Bu kayıt silinsin mi? Çiğ ürün ("+nf(x.cigMiktar)+" "+x.birim+" "+x.ad+") stoğa geri döner"+(x.sonLotId?", işlenmiş ürün stoktan çıkar":"")+"."+(kul>0?" DİKKAT: işlenmiş üründen "+nf(kul,3)+" "+(x.sonBirim||"")+" reçetelerde kullanılmış; stok eksiye düşer.":""),"Sil")) return;
     this.geriAl(x); V.islemler=this.liste_().filter(z=>z.id!==id); kaydet(); this.goster(); toast("Silindi; çiğ ürün stoğa geri döndü"); },
   excel(){ const k=aktifKres(); const r=this.liste_().filter(x=>x.kres===k).sort((a,b)=>(a.t||"").localeCompare(b.t||""));
     const H=["İşleme gidiş","Saat","Çiğ ürün","Çiğ miktar","Birim","İşlem","İşlenmiş ürün","İşlenmiş miktar","Birim","Bitiş","Fire","Fire %","Not"];

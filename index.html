@@ -3506,7 +3506,7 @@ function kuCevir(u,miktar,birim){ if(!u||!(miktar>0)) return {m:null}; const b=S
   const a=ambalajMiktar(u); const v=a&&(a.b==="kg"?kgDeg:ltDeg); if(a&&v!=null) return {m:yuvarla(v/a.v),not:"≈ "+nf(v/a.v,2)+" "+u.birim};
   return {m:null,uyar:"Birim çevrilemedi"}; }
 const OGUNLER=["Sabah öğünü","Öğle öğünü","İkindi öğünü"];
-function ogunAd(o){ const k=katla(o||"").trim(); if(!k) return ""; if(/KAHVALTI|SABAH/.test(k)) return "Sabah öğünü"; if(/YEMEK|OGLE|OGLEN/.test(k)) return "Öğle öğünü"; if(/IKINDI/.test(k)) return "İkindi öğünü"; return o; }
+function ogunAd(o){ const k=katla(o||"").trim(); if(!k) return ""; if(/KAHVALTI|SABAH/.test(k)) return "Sabah öğünü"; if(/YEMEK|OGLE|OGLEN/.test(k)) return "Öğle öğünü"; if(/IKINDI|MEYVE/.test(k)) return "İkindi öğünü"; return o; }
 function ogunSecHtml(v,attr){ v=ogunAd(v); const l=OGUNLER.includes(v)||!v?OGUNLER:OGUNLER.concat([v]); return `<select ${attr}>${l.map(o=>`<option${o===v?" selected":""}>${esc(o)}</option>`).join("")}</select>`; }
 SAYFA.kullanim={ ilk:false,
   goster(){ kresCiz(); if(!this.ilk){ this.ilk=true; tarihMaske($("#ku_t")); $("#ku_t").value=trTarih(bugun());

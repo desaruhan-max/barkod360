@@ -280,6 +280,7 @@ img[data-g],.dlg img{cursor:zoom-in}
     <button data-tab="kabul"><span class="i"><svg viewBox="0 0 24 24"><path d="M3 5v14M6 5v14M10 5v14M13 5v14M17 5v14M21 5v14"/></svg></span>MAL KABUL (OKUT)</button>
     <button data-tab="cikis"><span class="i"><svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></span>STOKTAN ÇIKIŞ</button>
     <button data-tab="kullanim"><span class="i"><svg viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10"/><path d="M17 3c-2 0-3 2-3 5s1 4 3 4v9"/></svg></span>GÜNLÜK KULLANIM</button>
+    <button data-tab="menu"><span class="i"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>MENÜ (HAFTALIK / AYLIK)</button>
     <button data-tab="sevk"><span class="i"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3z"/><path d="M14 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span>SEVK</button>
     <button data-tab="islenmis"><span class="i"><svg viewBox="0 0 24 24"><path d="M4 11h16"/><path d="M5 11v6a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-6"/><path d="M2 11h2M20 11h2"/><path d="M9 4c0 1.5 1 1.5 1 3M13 4c0 1.5 1 1.5 1 3"/></svg></span>İŞLENMİŞ ÜRÜNLER</button>
     <button data-tab="sayim"><span class="i"><svg viewBox="0 0 24 24"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2"/><path d="M9 13l2 2 4-4"/></svg></span>STOK SAYIMI</button>
@@ -442,6 +443,20 @@ img[data-g],.dlg img{cursor:zoom-in}
     <div style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="ku_vaz">Temizle</button><button class="btn primary big" id="ku_kay" style="flex:1">Kontrol ettim · Kaydet</button></div>
   </div>
   <div class="card"><h3>Girilen günler</h3><div id="ku_liste"></div></div>
+</section>
+
+<section class="tab" id="tab-menu">
+  <div id="mn_birak" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(27,107,82,.18);align-items:center;justify-content:center;pointer-events:none"><div style="background:#fff;border:3px dashed var(--brand);border-radius:16px;padding:30px 40px;font-size:20px;font-weight:700;color:var(--brand)">📅 Menü resmini buraya bırakın</div></div>
+  <div class="sec-h"><h2>Menü (haftalık / aylık)</h2><span class="small muted">4 kreş için ortak</span></div>
+  <div class="card">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <button class="btn primary" id="mn_foto">📸 Menü fotoğrafı</button><button class="btn" id="mn_galeri">🖼 Galeriden</button><button class="btn" id="mn_gun">+ Gün ekle</button>
+    </div>
+    <div class="small muted" style="margin-top:6px">Haftalık ya da aylık menünün ekran görüntüsünü bu sayfaya <b>sürükleyip bırakın</b> ya da <b>Ctrl+V</b> ile yapıştırın. Okunan günler aşağıda çıkar; kontrol edip <b>Kaydet</b>'e basın.</div>
+    <div id="mn_dur" class="small" style="margin:6px 0"></div>
+    <div id="mn_onizle"></div>
+  </div>
+  <div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Kayıtlı menü</h3><span style="flex:1"></span><button class="btn sm" id="mn_geri">◀</button><b id="mn_ay"></b><button class="btn sm" id="mn_ileri">▶</button></div><div id="mn_liste" style="margin-top:8px"></div></div>
 </section>
 
 <section class="tab" id="tab-cikis">
@@ -824,7 +839,7 @@ const DB = {
   sil(k){ return this.islem("readwrite", s=>s.delete(k)); },
   anahtarlar(){ return this.islem("readonly", s=>s.getAllKeys()); }
 };
-function bosVeri(){ return {surum:1, urunler:{}, lotlar:{}, hareketler:[], sayimlar:[], sevkler:[], islemler:[], kullanimlar:[], aktifSayim:null, sayimBekleyen:{},
+function bosVeri(){ return {surum:1, urunler:{}, lotlar:{}, hareketler:[], sayimlar:[], sevkler:[], islemler:[], kullanimlar:[], menuler:[], aktifSayim:null, sayimBekleyen:{},
   ayar:{aktifKres:KRESLER[0], tedarikciler:TEDARIKCI_VARSAYILAN.slice(), sonYedek:null, icKodSayac:1}}; }
 let V = bosVeri();
 // Her kreşin yarım sayımı ayrı tutulur: kreş değişince açık sayım bekletmeye alınır, yeni kreşin bekleyen sayımı açılır
@@ -845,7 +860,7 @@ async function yerelKaydet(){ try{ await DB.yaz("veri",V); await DB.yaz("senk",{
    Belgede her varlık için {v, ts} ya da {sil, ts}; birleştirmede en yeni ts kazanır.
    İnternet yokken kayıtlar telefonda bekler, bağlantı gelince gönderilir. */
 const SENK = {db:null, assets:null, cihaz:null, SON:{}, TS:{}, kova:{}, kirli:{}, gonderildi:{}, calisiyor:false, durum:"yerel", son:null, abone:null};
-function varliklar(){ const o={}; for(const k in V.urunler) o["u:"+k]=V.urunler[k]; for(const k in V.lotlar) o["l:"+k]=V.lotlar[k]; for(const h of V.hareketler) o["h:"+h.id]=h; for(const x of V.sayimlar) o["s:"+x.id]=x; for(const x of (V.sevkler||[])) o["v:"+x.id]=x; for(const x of (V.islemler||[])) o["i:"+x.id]=x; for(const x of (V.kullanimlar||[])) o["k:"+x.id]=x; return o; }
+function varliklar(){ const o={}; for(const k in V.urunler) o["u:"+k]=V.urunler[k]; for(const k in V.lotlar) o["l:"+k]=V.lotlar[k]; for(const h of V.hareketler) o["h:"+h.id]=h; for(const x of V.sayimlar) o["s:"+x.id]=x; for(const x of (V.sevkler||[])) o["v:"+x.id]=x; for(const x of (V.islemler||[])) o["i:"+x.id]=x; for(const x of (V.kullanimlar||[])) o["k:"+x.id]=x; for(const x of (V.menuler||[])) o["n:"+x.id]=x; return o; }
 function senkBaslangic(){ SENK.SON={}; const c=varliklar(); for(const k in c) SENK.SON[k]=JSON.stringify(c[k]); }
 function aktifKovaId(){ const g=bugun(); let n=0, id; while(true){ id=g+"_"+SENK.cihaz+(n?"_"+n:""); const k=SENK.kova[id]; if(!k || JSON.stringify(k).length<180000) return id; n++; } }
 function senkFark(){
@@ -867,6 +882,7 @@ function uzakUygula(belgeler){
       else if(tip==="s"){ V.sayimlar=V.sayimlar.filter(x=>x.id!==id); if(!r.sil) V.sayimlar.push(r.v); }
       else if(tip==="v"){ V.sevkler=(V.sevkler||[]).filter(x=>x.id!==id); if(!r.sil) V.sevkler.push(r.v); }
       else if(tip==="k"){ V.kullanimlar=(V.kullanimlar||[]).filter(x=>x.id!==id); if(!r.sil) V.kullanimlar.push(r.v); }
+      else if(tip==="n"){ V.menuler=(V.menuler||[]).filter(x=>x.id!==id); if(!r.sil) V.menuler.push(r.v); }
       else if(tip==="i"){ V.islemler=(V.islemler||[]).filter(x=>x.id!==id); if(!r.sil) V.islemler.push(r.v); }
       else if(tip==="h"){ if(!hIdx){ hIdx={}; V.hareketler.forEach((h,i)=>hIdx[h.id]=i); }
         if(r.sil){ if(hIdx[id]!=null){ V.hareketler.splice(hIdx[id],1); hIdx=null; } }
@@ -898,6 +914,7 @@ async function fotoYukle(){
   for(const l of Object.values(V.lotlar)) if((l.fotoIds||[]).length && (await isle(l,"fotoIds"))) deg=true;
   for(const x of (V.islemler||[])) if((x.fotoIds||[]).length && (await isle(x,"fotoIds"))) deg=true;
   for(const x of (V.kullanimlar||[])) if((x.belgeIds||[]).length && (await isle(x,"belgeIds"))) deg=true;
+  for(const x of (V.menuler||[])) if((x.belgeIds||[]).length && (await isle(x,"belgeIds"))) deg=true;
   for(const u of Object.values(V.urunler)){ if(u.fotoId && (await isle(u,"fotoId"))) deg=true; if(u.gorselId && (await isle(u,"gorselId"))) deg=true; }
   if(deg){ senkFark(); }
 }
@@ -1347,7 +1364,7 @@ const ClaudeOkur = {
   async api(istem, blob, signal){ // telefon/laptop: kullanıcının kendi Claude anahtarıyla doğrudan
     const b64=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(String(fr.result).split(",")[1]); fr.onerror=rej; fr.readAsDataURL(blob); });
     const y=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":this.anahtar,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-      body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:2000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
+      body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:6000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:istem}]}]})});
     const d=await y.json().catch(()=>({}));
     if(!y.ok){ const m=(d.error&&d.error.message)||("HTTP "+y.status); const e=new Error(y.status===401?"Anahtar geçersiz":(y.status===400&&/credit/i.test(m)?"Kredi bitmiş":m)); e.code=y.status===401?"anahtar":"api"; if(y.status===401) this.kapali=true; throw e; }
     const metin=(d.content||[]).map(c=>c.text||"").join(""); const a=metin.indexOf("{"), z=metin.lastIndexOf("}");
@@ -1382,6 +1399,15 @@ Açıklama yazma, düşünceni yazma; YALNIZ şu JSON'u yaz: {"stt":null,"tett":
     } finally{ clearTimeout(sure); }
   },
   // Aşçının günlük reçete/kullanım kâğıdı: tarih, öğünler, malzeme + miktar + birim
+  // Haftalık / aylık menü tablosu: her gün için sabah, öğle, ikindi
+  async menuOku(canvas){
+    const k=Math.min(1,2600/Math.max(canvas.width,canvas.height)); const c=document.createElement("canvas"); c.width=Math.round(canvas.width*k); c.height=Math.round(canvas.height*k); c.getContext("2d").drawImage(canvas,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.9));
+    const istem=`Bu bir kreşin haftalık ya da aylık yemek menüsü tablosu. Bugün ${bugun()}.
+Her gün için tarihi (YYYY-MM-DD; 20.10.2026 = 2026-10-20) ve o günün SABAH, ÖĞLE(N), İKİNDİ öğünlerinde yazan yemekleri aynen oku (virgüllerle, tablodaki sırayla; satırlar arasına virgül koy). Boş günleri atla. Tahmin etme.
+Yalnız şu JSON'u yaz: {"gunler":[{"tarih":"2026-10-20","sabah":"...","ogle":"...","ikindi":"..."}]}`;
+    const ctl=new AbortController(); const sure=setTimeout(()=>ctl.abort(),90000);
+    try{ return ARTIFACT? await this.s.json(istem,{images:[blob],modelTier:"default",cache:false,signal:ctl.signal}) : await this.api(istem,blob,ctl.signal); } finally{ clearTimeout(sure); } },
   async receteOku(canvas){
     const k=Math.min(1,2000/Math.max(canvas.width,canvas.height)); const c=document.createElement("canvas"); c.width=Math.round(canvas.width*k); c.height=Math.round(canvas.height*k); c.getContext("2d").drawImage(canvas,0,0,c.width,c.height);
     const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",.88));
@@ -3568,8 +3594,8 @@ SAYFA.kullanim={ ilk:false,
         KU.satirlar.push({ogun:ogunAd(o.ogun||""),yemek:o.yemek||"",ad:x.ad||"",miktar:+x.miktar||null,birim:x.birim||"",barkod:u?u.barkod:"",m:cv.m,uyar:cv.uyar||"",lotId:""}); }
       d.innerHTML="✓ Okundu: "+KU.satirlar.length+" malzeme. Eşleşmeleri ve miktarları kontrol edin; <b>sarı</b> satırlarda ürünü seçin.";
       this.ciz(); }catch(e){ d.textContent="Okunamadı ("+(e&&e.message||e)+"). Satırları elle ekleyebilirsiniz."; } },
-  ciz(){ const t=this.tarih(); const kres=aktifKres(); const sn=kuSinir(kres); const kayitOnly=t&&sn&&t<=sn;
-    const ust=t?(kayitOnly?`<div class="banner">⚠ ${trTarih(t)} tarihi ${esc(KISA[kres]||kres)} sayımından (${trTarih(sn)}) önce/aynı gün: <b>stoktan düşülmeyecek, yalnız kayıt tutulacak.</b></div>`:`<div class="small muted">${esc(kres)} · ${trTarih(t)} · onaylayınca stoktan düşülür${sn?" (son sayım "+trTarih(sn)+")":""}.</div>`):'<div class="small neg">Tarihi yazın.</div>';
+  ciz(){ const t=this.tarih(); const kres=aktifKres(); const sn=kuSinir(kres); const kayitOnly=t&&sn&&t<=sn; const mnu=t?menuSatir(menuGun(t),true):"";
+    const ust=mnu+(t?(kayitOnly?`<div class="banner">⚠ ${trTarih(t)} tarihi ${esc(KISA[kres]||kres)} sayımından (${trTarih(sn)}) önce/aynı gün: <b>stoktan düşülmeyecek, yalnız kayıt tutulacak.</b></div>`:`<div class="small muted">${esc(kres)} · ${trTarih(t)} · onaylayınca stoktan düşülür${sn?" (son sayım "+trTarih(sn)+")":""}.</div>`):'<div class="small neg">Tarihi yazın.</div>');
     if(!KU.satirlar.length){ $("#ku_tablo").innerHTML=ust+'<div class="empty" style="margin-top:8px">Reçete kâğıdının fotoğrafını çekin ya da “+ Satır ekle” ile girin.</div>'; return; }
     $("#ku_tablo").innerHTML=ust+`<div class="tw"><table class="rt"><thead><tr><th>Öğün</th><th>Kâğıtta</th><th>Stoktaki ürün</th><th class="r">Düşülecek</th><th>STT</th><th class="r">Stok</th><th></th></tr></thead><tbody>${KU.satirlar.map((x,i)=>{ const u=V.urunler[x.barkod]; const ls=u?fefoSirala(lotlarOf(u.barkod,kres).filter(l=>!l.red&&kalanOf(l.id)>0)):[]; const st=u?stokOf(u.barkod,kres):0; const az=u&&x.m>0&&st+1e-9<x.m;
       return `<tr style="${!u||x.m==null?"background:#FFF8E6":""}"><td>${ogunSecHtml(x.ogun,`data-ko="${i}" style="width:120px"`)}</td>
@@ -3628,7 +3654,7 @@ SAYFA.kullanim={ ilk:false,
   liste(){ const k=aktifKres(); const r=(V.kullanimlar||[]).filter(x=>x.kres===k).sort((a,b)=>b.tarih.localeCompare(a.tarih)||(b.kayit||"").localeCompare(a.kayit||""));
     const sttler=(x,s)=>{ const hs=V.hareketler.filter(h=>h.kullanimId===x.id&&h.barkod===s.barkod); return [...new Set(hs.map(h=>{ const l=V.lotlar[h.lotId]; return l&&l.skt?trTarih(l.skt):"tarihsiz"; }))].join(", "); };
     $("#ku_liste").innerHTML=r.length?r.map(x=>`<details open style="border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px"><summary style="cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap;list-style:none"><b style="font-size:16px">▾ ${trTarih(x.tarih)}</b> ${x.stok?'<span class="pill ok">stoktan düşüldü</span>':'<span class="pill gh">yalnız kayıt</span>'} <span class="small muted">${x.satirlar.length} malzeme</span><span style="flex:1"></span>${belgeDugmeleri(x,"data-kub")}<button class="btn sm danger" data-kusil="${x.id}">Sil</button></summary>
-      <div class="tw" style="margin-top:8px"><table class="rt"><thead><tr><th>Öğün</th><th>Kâğıtta</th><th>Stoktan düşen ürün</th><th class="r">Miktar</th><th>STT/TETT</th><th></th></tr></thead><tbody>${x.satirlar.map((s,n)=>{ const u=V.urunler[s.barkod]; const ilk=n===0||ogunAd(x.satirlar[n-1].ogun)!==ogunAd(s.ogun);
+      ${menuSatir(menuGun(x.tarih),true)}<div class="tw" style="margin-top:8px"><table class="rt"><thead><tr><th>Öğün</th><th>Kâğıtta</th><th>Stoktan düşen ürün</th><th class="r">Miktar</th><th>STT/TETT</th><th></th></tr></thead><tbody>${x.satirlar.map((s,n)=>{ const u=V.urunler[s.barkod]; const ilk=n===0||ogunAd(x.satirlar[n-1].ogun)!==ogunAd(s.ogun);
         return `<tr><td>${ilk?"<b>"+esc(ogunAd(s.ogun)||"—")+"</b>":""}</td><td>${esc(s.ad||"")}${s.girilen?' <span class="muted">'+esc(s.girilen)+"</span>":""}</td><td>${u?esc(u.ad)+(u.marka?' <span class="muted">· '+esc(u.marka)+"</span>":""):'<span class="neg">—</span>'}</td><td class="r" style="white-space:nowrap"><b>${nf(s.miktar,3)}</b> ${esc(s.birim||"")}${x.stok&&s.dusen+1e-9<s.miktar?'<div class="small neg">düşen '+nf(s.dusen,3)+"</div>":""}${u?ambalajYazKu(u,s.miktar):""}</td><td class="small">${x.stok?sttler(x,s):""}</td><td class="act" style="white-space:nowrap"><button class="btn sm" data-kued="${x.id}|${n}">✎ Düzelt</button> <button class="btn sm danger" data-kuss="${x.id}|${n}">Sil</button></td></tr>`; }).join("")}</tbody></table></div><div style="margin-top:6px"><button class="btn sm" data-kued="${x.id}|-1">+ Satır ekle</button></div>${x.not?'<div class="small muted" style="margin-top:6px">'+esc(x.not)+"</div>":""}</details>`).join(""):'<div class="empty">Bu kreş için girilmiş gün yok</div>';
     $$("#ku_liste summary button").forEach(b=>b.addEventListener("click",e=>e.preventDefault()));
     $$("[data-kub]").forEach(b=>b.onclick=()=>{ const x=(V.kullanimlar||[]).find(z=>(z.belgeIds||[]).includes(b.dataset.kub)); if(x) belgeAc(x,b.dataset.kub); });
@@ -3638,6 +3664,65 @@ SAYFA.kullanim={ ilk:false,
       x.satirlar.splice(+n,1); this.yenidenDus(x); toast("Satır silindi"); });
     $$("[data-kusil]").forEach(b=>b.onclick=async()=>{ const x=V.kullanimlar.find(z=>z.id===b.dataset.kusil); if(!x) return; if(!await onayla(trTarih(x.tarih)+" günlük kullanım kaydı silinsin mi?"+(x.stok?" Düşülen malzemeler stoğa geri döner.":""),"Sil")) return;
       V.hareketler=V.hareketler.filter(h=>h.kullanimId!==x.id); V.kullanimlar=V.kullanimlar.filter(z=>z.id!==x.id); hesapla(); kaydet(); this.liste(); toast("Silindi"); }); }
+};
+
+/* ================== MENÜ (haftalık / aylık) ==================
+   Her gün bir kayıt: {id:"mn"+yyyymmdd, tarih, sabah, ogle, ikindi, belgeIds}. 4 kreş için ortak. */
+const MN={onizle:[],belge:null,ay:bugun().slice(0,7)};
+const GUN_ADLARI=["Pazar","Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi"];
+function gunAdi(t){ const d=new Date(t+"T12:00:00"); return isNaN(d)?"":GUN_ADLARI[d.getDay()]; }
+function menuGun(t){ return (V.menuler||[]).find(x=>x.tarih===t); }
+function menuSatir(m,kisa){ if(!m) return ""; const p=[["Sabah",m.sabah],["Öğle",m.ogle],["İkindi",m.ikindi]].filter(x=>x[1]);
+  return `<div class="small" style="background:#F3F8F5;border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0">📅 <b>Menü${kisa?"":" "+trTarih(m.tarih)}</b> · ${p.map(x=>`<b>${x[0]}:</b> ${esc(x[1])}`).join(" · ")}</div>`; }
+SAYFA.menu={ ilk:false,
+  goster(){ if(!this.ilk){ this.ilk=true; V.menuler=V.menuler||[];
+      $("#mn_foto").onclick=async()=>{ const f=await gorselSec(true); if(f) this.dosya(f); }; $("#mn_galeri").onclick=async()=>{ const f=await gorselSec(false); if(f) this.dosya(f); };
+      $("#mn_gun").onclick=()=>this.duzelt(null);
+      $("#mn_geri").onclick=()=>{ const d=new Date(MN.ay+"-01T12:00:00"); d.setMonth(d.getMonth()-1); MN.ay=d.toLocaleDateString("sv").slice(0,7); this.liste(); };
+      $("#mn_ileri").onclick=()=>{ const d=new Date(MN.ay+"-01T12:00:00"); d.setMonth(d.getMonth()+1); MN.ay=d.toLocaleDateString("sv").slice(0,7); this.liste(); };
+      const isaret=on=>{ const c=$("#mn_birak"); if(c) c.style.display=on?"flex":"none"; };
+      document.addEventListener("dragenter",e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); isaret(true); });
+      document.addEventListener("dragover",e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); try{ e.dataTransfer.dropEffect="copy"; }catch(_){} isaret(true); });
+      document.addEventListener("dragleave",e=>{ if(AKTIF_SEKME!=="menu") return; if(!e.relatedTarget||e.clientX<=0||e.clientY<=0) isaret(false); });
+      document.addEventListener("drop",async e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); isaret(false); const dt=e.dataTransfer;
+        let f=[...(dt.files||[])].find(x=>/^image\//.test(x.type)||/\.(jpe?g|png|webp)$/i.test(x.name||"")); if(!f){ const it=[...(dt.items||[])].find(x=>x.kind==="file"); if(it) f=it.getAsFile(); }
+        if(f){ this.dosya(f.type?f:new File([f],f.name||"menu.jpg",{type:"image/jpeg"})); return; }
+        let u=dt.getData("text/uri-list")||""; if(!u){ const h=dt.getData("text/html")||""; const m=h.match(/<img[^>]+src="([^"]+)"/i); if(m) u=m[1]; }
+        u=u.split("\n")[0].trim(); if(u){ try{ const r=await fetch(u); const b=await r.blob(); if(/^image\//.test(b.type)){ this.dosya(new File([b],"menu.jpg",{type:b.type})); return; } }catch(_){} }
+        toast("Bu resim sürüklenerek alınamadı. Resmi kopyalayıp burada Ctrl+V ile yapıştırın.",1,9000); });
+      document.addEventListener("paste",e=>{ if(AKTIF_SEKME!=="menu") return; const it=[...((e.clipboardData&&e.clipboardData.items)||[])].find(x=>x.kind==="file"&&/^image\//.test(x.type)); if(!it) return; e.preventDefault(); const f=it.getAsFile(); if(f) this.dosya(f); }); }
+    this.onizleCiz(); this.liste(); },
+  async dosya(f){ const d=$("#mn_dur");
+    try{ const bm=await createImageBitmap(f); const k=Math.min(1,2600/Math.max(bm.width,bm.height)); const c=document.createElement("canvas"); c.width=Math.round(bm.width*k); c.height=Math.round(bm.height*k); c.getContext("2d").drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close();
+      MN.belge=await fotoKaydet(c,2200,.85);
+      if(!(await ClaudeOkur.kullanilabilir())){ d.textContent="Resim kaydedildi. Okuyucu kullanılamıyor; günleri “+ Gün ekle” ile girin."; return; }
+      d.innerHTML="⏳ Menü okunuyor… (aylık menüde biraz sürebilir)"; const j=await ClaudeOkur.menuOku(c);
+      MN.onizle=((j&&j.gunler)||[]).filter(g=>typeof g.tarih==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(g.tarih)).map(g=>({tarih:g.tarih,sabah:String(g.sabah||"").trim(),ogle:String(g.ogle||"").trim(),ikindi:String(g.ikindi||"").trim()})).sort((a,b)=>a.tarih.localeCompare(b.tarih));
+      d.innerHTML=MN.onizle.length?"✓ "+MN.onizle.length+" gün okundu. Kontrol edin, gerekirse düzeltin, sonra <b>Kaydet</b>.":"Menüde gün okunamadı. “+ Gün ekle” ile girebilirsiniz.";
+      this.onizleCiz(); }catch(e){ d.textContent="Okunamadı ("+(e&&e.message||e)+"). “+ Gün ekle” ile girebilirsiniz."; } },
+  onizleCiz(){ const k=$("#mn_onizle"); if(!MN.onizle.length){ k.innerHTML=""; return; }
+    k.innerHTML=`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Sabah öğünü</th><th>Öğle öğünü</th><th>İkindi öğünü</th><th></th></tr></thead><tbody>${MN.onizle.map((g,i)=>`<tr${menuGun(g.tarih)?' style="background:#FFF8E6"':""}><td style="white-space:nowrap"><input data-mt="${i}" value="${trTarih(g.tarih)}" style="width:100px"><div class="small muted">${gunAdi(g.tarih)}${menuGun(g.tarih)?' · <span class="neg">kayıtlı menünün yerine geçer</span>':""}</div></td>${["sabah","ogle","ikindi"].map(a=>`<td><textarea data-m${a[0]}="${i}" rows="3" style="width:100%;min-width:160px">${esc(g[a])}</textarea></td>`).join("")}<td><button class="btn sm danger" data-mx="${i}">✕</button></td></tr>`).join("")}</tbody></table></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn" id="mn_vaz">Vazgeç</button><button class="btn primary big" id="mn_kay" style="flex:1">Kontrol ettim · Kaydet (${MN.onizle.length} gün)</button></div>`;
+    $$("[data-mt]",k).forEach(e=>e.onchange=()=>{ const t=tarihCoz(e.value); if(t){ MN.onizle[+e.dataset.mt].tarih=t; this.onizleCiz(); } else toast("Tarihi gg.aa.yyyy yazın",1); });
+    for(const a of ["sabah","ogle","ikindi"]) $$(`[data-m${a[0]}]`,k).forEach(e=>e.oninput=()=>MN.onizle[+e.getAttribute("data-m"+a[0])][a]=e.value.trim());
+    $$("[data-mx]",k).forEach(e=>e.onclick=()=>{ MN.onizle.splice(+e.dataset.mx,1); this.onizleCiz(); });
+    $("#mn_vaz",k).onclick=()=>{ MN.onizle=[]; MN.belge=null; $("#mn_dur").textContent=""; this.onizleCiz(); };
+    $("#mn_kay",k).onclick=()=>{ for(const g of MN.onizle){ const id="mn"+g.tarih.replace(/-/g,""); const eski=menuGun(g.tarih); V.menuler=V.menuler.filter(x=>x.tarih!==g.tarih);
+        V.menuler.push({id,tarih:g.tarih,sabah:g.sabah,ogle:g.ogle,ikindi:g.ikindi,belgeIds:MN.belge?[MN.belge]:((eski&&eski.belgeIds)||[]),kayit:new Date().toISOString()}); }
+      const n=MN.onizle.length; MN.ay=MN.onizle[0].tarih.slice(0,7); MN.onizle=[]; MN.belge=null; $("#mn_dur").textContent=""; kaydet(); this.onizleCiz(); this.liste(); toast(n+" günün menüsü kaydedildi"); }; },
+  duzelt(t){ const m=t?menuGun(t):null; const b=dlg(m?"Menüyü düzelt · "+trTarih(t):"+ Gün ekle",`<label class="f">Tarih<input id="mdT" inputmode="numeric" value="${m?trTarih(m.tarih):trTarih(bugun())}" style="font-size:16px"></label>
+      <label class="f">Sabah öğünü<textarea id="mdS" rows="2">${esc(m?m.sabah:"")}</textarea></label><label class="f">Öğle öğünü<textarea id="mdO" rows="3">${esc(m?m.ogle:"")}</textarea></label><label class="f">İkindi öğünü<textarea id="mdI" rows="2">${esc(m?m.ikindi:"")}</textarea></label>`,
+      [{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const yt=tarihCoz($("#mdT",b).value); if(!yt){ toast("Tarihi gg.aa.yyyy yazın",1); return false; }
+        const v={sabah:$("#mdS",b).value.trim(),ogle:$("#mdO",b).value.trim(),ikindi:$("#mdI",b).value.trim()}; if(!v.sabah&&!v.ogle&&!v.ikindi){ toast("En az bir öğün yazın",1); return false; }
+        const bel=(m&&m.belgeIds)||((menuGun(yt)||{}).belgeIds)||[]; V.menuler=V.menuler.filter(x=>x.tarih!==yt&&(!m||x.tarih!==m.tarih));
+        V.menuler.push(Object.assign({id:"mn"+yt.replace(/-/g,""),tarih:yt,belgeIds:bel,kayit:new Date().toISOString()},v)); MN.ay=yt.slice(0,7); kaydet(); this.liste(); toast("Menü kaydedildi"); }}]);
+    tarihMaske($("#mdT",b)); },
+  liste(){ $("#mn_ay").textContent=new Date(MN.ay+"-01T12:00:00").toLocaleDateString("tr-TR",{month:"long",year:"numeric"});
+    const r=(V.menuler||[]).filter(x=>x.tarih.startsWith(MN.ay)).sort((a,b)=>a.tarih.localeCompare(b.tarih));
+    $("#mn_liste").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Sabah öğünü</th><th>Öğle öğünü</th><th>İkindi öğünü</th><th></th></tr></thead><tbody>${r.map(m=>`<tr${m.tarih===bugun()?' style="background:#EAF5EF"':""}><td style="white-space:nowrap"><b>${trTarih(m.tarih)}</b><div class="small muted">${gunAdi(m.tarih)}</div></td><td class="small">${esc(m.sabah||"")}</td><td class="small">${esc(m.ogle||"")}</td><td class="small">${esc(m.ikindi||"")}</td><td class="act" style="white-space:nowrap">${belgeDugmeleri(m,"data-mnb")} <button class="btn sm" data-mnd="${m.tarih}">✎ Düzelt</button> <button class="btn sm danger" data-mns="${m.tarih}">Sil</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Bu ay için menü girilmemiş</div>';
+    $$("[data-mnd]").forEach(b=>b.onclick=()=>this.duzelt(b.dataset.mnd));
+    $$("[data-mnb]").forEach(b=>b.onclick=()=>{ const x=V.menuler.find(z=>(z.belgeIds||[]).includes(b.dataset.mnb)); if(x) belgeAc(x,b.dataset.mnb); });
+    $$("[data-mns]").forEach(b=>b.onclick=async()=>{ if(!await onayla(trTarih(b.dataset.mns)+" menüsü silinsin mi?","Sil")) return; V.menuler=V.menuler.filter(x=>x.tarih!==b.dataset.mns); kaydet(); this.liste(); toast("Silindi"); }); }
 };
 
 </script>

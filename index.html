@@ -429,11 +429,12 @@ img[data-g],.dlg img{cursor:zoom-in}
 
 <!-- ============ ÇIKIŞ ============ -->
 <section class="tab" id="tab-kullanim">
+  <div id="ku_birak" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(27,107,82,.18);align-items:center;justify-content:center;pointer-events:none"><div style="background:#fff;border:3px dashed var(--brand);border-radius:16px;padding:30px 40px;font-size:20px;font-weight:700;color:var(--brand)">📄 Reçete fotoğrafını buraya bırakın</div></div>
   <div class="sec-h"><h2>Günlük kullanım (reçete)</h2><span class="kr" data-kres></span></div>
   <div class="card">
     <div class="fg">
       <label class="f">Tarih<input id="ku_t" inputmode="numeric" placeholder="gg.aa.yyyy" style="font-size:16px"></label>
-      <div class="f" style="align-self:end;display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary" id="ku_foto">📸 Reçete fotoğrafı</button><button class="btn" id="ku_galeri">🖼 Galeriden</button><button class="btn" id="ku_satir">+ Satır ekle</button></div>
+      <div class="f" style="align-self:end;display:flex;gap:6px;flex-wrap:wrap"><button class="btn primary" id="ku_foto">📸 Reçete fotoğrafı</button><button class="btn" id="ku_galeri">🖼 Galeriden</button><button class="btn" id="ku_satir">+ Satır ekle</button></div><div class="small muted" style="grid-column:1/-1">Laptopta: fotoğrafı bu sayfaya <b>sürükleyip bırakın</b> ya da WhatsApp’ta resme sağ tıklayıp <b>“Resmi kopyala”</b> deyip burada <b>Ctrl+V</b> ile yapıştırın.</div>
     </div>
     <div id="ku_dur" class="small" style="margin:6px 0"></div>
     <div id="ku_tablo"></div>
@@ -3493,10 +3494,23 @@ function kuCevir(u,miktar,birim){ if(!u||!(miktar>0)) return {m:null}; const b=S
 SAYFA.kullanim={ ilk:false,
   goster(){ kresCiz(); if(!this.ilk){ this.ilk=true; tarihMaske($("#ku_t")); $("#ku_t").value=trTarih(bugun());
       $("#ku_foto").onclick=()=>this.foto(true); $("#ku_galeri").onclick=()=>this.foto(false); $("#ku_satir").onclick=()=>{ KU.satirlar.push({ogun:(KU.satirlar.at(-1)||{}).ogun||"Öğle",ad:"",miktar:null,birim:"",barkod:"",m:null,lotId:""}); this.ciz(); };
-      $("#ku_vaz").onclick=()=>{ KU.satirlar=[]; KU.belge=null; $("#ku_dur").textContent=""; this.ciz(); }; $("#ku_kay").onclick=()=>this.kaydet(); $("#ku_t").addEventListener("input",()=>this.ciz()); }
+      $("#ku_vaz").onclick=()=>{ KU.satirlar=[]; KU.belge=null; $("#ku_dur").textContent=""; this.ciz(); }; $("#ku_kay").onclick=()=>this.kaydet(); $("#ku_t").addEventListener("input",()=>this.ciz());
+      // laptop: reçete fotoğrafını sayfaya sürükle-bırak
+      const alan=$("#tab-kullanim"); const isaret=on=>{ const c=$("#ku_birak"); if(c) c.style.display=on?"flex":"none"; };
+      alan.addEventListener("dragover",e=>{ if([...(e.dataTransfer.types||[])].includes("Files")){ e.preventDefault(); isaret(true); } });
+      alan.addEventListener("dragleave",e=>{ if(!alan.contains(e.relatedTarget)) isaret(false); });
+      alan.addEventListener("dragover",e=>{ if([...(e.dataTransfer.types||[])].some(t=>t==="text/uri-list"||t==="text/html")){ e.preventDefault(); isaret(true); } });
+      alan.addEventListener("drop",async e=>{ e.preventDefault(); isaret(false); const f=[...(e.dataTransfer.files||[])].find(x=>/^image\//.test(x.type)); if(f){ this.dosya(f); return; }
+        // WhatsApp Web gibi yerlerden sürüklenen resim dosya değil adres olarak gelir: almayı dene
+        let u=e.dataTransfer.getData("text/uri-list")||""; if(!u){ const h=e.dataTransfer.getData("text/html")||""; const m=h.match(/<img[^>]+src="([^"]+)"/i); if(m) u=m[1]; }
+        u=u.split("\n")[0].trim(); if(u){ try{ const r=await fetch(u); const b=await r.blob(); if(/^image\//.test(b.type)){ this.dosya(new File([b],"recete.jpg",{type:b.type})); return; } }catch(_){} }
+        toast("Bu resim sürüklenerek alınamadı. WhatsApp'ta resme sağ tıklayıp “Resmi kopyala” deyin, sonra burada Ctrl+V ile yapıştırın.",1,9000); });
+      // kopyala-yapıştır (Ctrl+V): WhatsApp'ta resmi kopyalayıp burada yapıştırın
+      document.addEventListener("paste",e=>{ if(AKTIF_SEKME!=="kullanim") return; const it=[...((e.clipboardData&&e.clipboardData.items)||[])].find(x=>x.kind==="file"&&/^image\//.test(x.type)); if(!it) return; e.preventDefault(); const f=it.getAsFile(); if(f) this.dosya(f); }); }
     this.ciz(); this.liste(); },
   tarih(){ return tarihCoz($("#ku_t").value); },
-  async foto(kamera){ const f=await gorselSec(kamera); if(!f) return; const d=$("#ku_dur");
+  async foto(kamera){ const f=await gorselSec(kamera); if(f) this.dosya(f); },
+  async dosya(f){ if(!f||!/^image\//.test(f.type||"image/")){ toast("Resim dosyası bırakın (jpg, png)",1); return; } const d=$("#ku_dur");
     try{ const bm=await createImageBitmap(f); const k=Math.min(1,2000/Math.max(bm.width,bm.height)); const c=document.createElement("canvas"); c.width=Math.round(bm.width*k); c.height=Math.round(bm.height*k); c.getContext("2d").drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close();
       KU.belge=await fotoKaydet(c,1600,.82);
       if(!(await ClaudeOkur.kullanilabilir())){ d.textContent="Fotoğraf kaydedildi. Okuyucu kullanılamıyor; satırları elle ekleyin."; return; }

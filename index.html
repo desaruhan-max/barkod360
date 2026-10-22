@@ -452,7 +452,7 @@ img[data-g],.dlg img{cursor:zoom-in}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
       <button class="btn primary" id="mn_foto">📸 Menü fotoğrafı</button><button class="btn" id="mn_galeri">🖼 Galeriden</button><button class="btn" id="mn_gun">+ Gün ekle</button>
     </div>
-    <div class="small muted" style="margin-top:6px">Haftalık ya da aylık menünün ekran görüntüsünü bu sayfaya <b>sürükleyip bırakın</b> ya da <b>Ctrl+V</b> ile yapıştırın. Okunan günler aşağıda çıkar; kontrol edip <b>Kaydet</b>'e basın.</div>
+    <div class="small muted" style="margin-top:6px"><b>Excel'den:</b> menü tablosunu tarih satırıyla birlikte seçip <b>Ctrl+C</b>, bu sayfada boş bir yere tıklayıp <b>Ctrl+V</b>. Ya da menünün resmini sürükleyip bırakın. Okunan günler aşağıda çıkar; kontrol edip <b>Kaydet</b>'e basın.</div>
     <div id="mn_dur" class="small" style="margin:6px 0"></div>
     <div id="mn_onizle"></div>
   </div>
@@ -3674,6 +3674,22 @@ function gunAdi(t){ const d=new Date(t+"T12:00:00"); return isNaN(d)?"":GUN_ADLA
 function menuGun(t){ return (V.menuler||[]).find(x=>x.tarih===t); }
 function menuSatir(m,kisa){ if(!m) return ""; const p=[["Sabah",m.sabah],["Öğle",m.ogle],["İkindi",m.ikindi]].filter(x=>x[1]);
   return `<div class="small" style="background:#F3F8F5;border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0">📅 <b>Menü${kisa?"":" "+trTarih(m.tarih)}</b> · ${p.map(x=>`<b>${x[0]}:</b> ${esc(x[1])}`).join(" · ")}</div>`; }
+// Excel'den kopyalanan menü (sekmeyle ayrılmış): tarih satırı sütunları belirler; SABAH / ÖĞLE(N) / İKİNDİ satırları öğünü
+function tsvCoz(t){ const r=[]; let row=[], f="", q=false; t=String(t).replace(/\r\n?/g,"\n");
+  for(let i=0;i<t.length;i++){ const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=c; continue; }
+    if(c==='"'&&f==="") q=true; else if(c==="\t"){ row.push(f); f=""; } else if(c==="\n"){ row.push(f); r.push(row); row=[]; f=""; } else f+=c; }
+  if(f!==""||row.length){ row.push(f); r.push(row); } return r; }
+function menuMetinCoz(txt){ const rows=tsvCoz(txt); const gun={}; let cols={}, sec=null;
+  const tarihHucre=v=>{ const m=String(v).trim().match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/); if(!m) return ""; let y=+m[3]; if(y<100) y+=2000; const t=y+"-"+String(m[2]).padStart(2,"0")+"-"+String(m[1]).padStart(2,"0"); return tarihGecerli(y,+m[2],+m[1])?t:""; };
+  const ogun=v=>{ const k=katla(v).replace(/[^A-Z]/g,""); if(/^(SABAH|KAHVALTI)(OGUNU)?$/.test(k)) return "sabah"; if(/^(OGLE|OGLEN|OGLEYEMEGI)(OGUNU)?$/.test(k)) return "ogle"; if(/^IKINDI(OGUNU)?$/.test(k)) return "ikindi"; return null; };
+  for(const r of rows){ const dolu=r.map((v,i)=>[i,String(v).replace(/\s*\n\s*/g,", ").replace(/[ \t\u00a0]+/g," ").replace(/^,\s*|,\s*$/g,"").trim()]).filter(x=>x[1]);
+    if(!dolu.length) continue;
+    const tr=dolu.map(x=>[x[0],tarihHucre(x[1])]).filter(x=>x[1]); if(tr.length){ cols={}; for(const [i,t] of tr){ cols[i]=t; gun[t]=gun[t]||{tarih:t,sabah:"",ogle:"",ikindi:""}; } sec=null; continue; }
+    const og=dolu.map(x=>ogun(x[1])).filter(Boolean); if(og.length&&og.length===dolu.length){ sec=og[0]; continue; }
+    if(!sec) continue;
+    for(const [i,v] of dolu){ const t=cols[i]; if(!t||ogun(v)) continue; const g=gun[t]; const parca=v.split(/\n/).map(z=>z.trim()).filter(Boolean).join(", "); g[sec]=g[sec]?g[sec]+", "+parca:parca; } }
+  return Object.values(gun).filter(g=>g.sabah||g.ogle||g.ikindi).sort((a,b)=>a.tarih.localeCompare(b.tarih)); }
 SAYFA.menu={ ilk:false,
   goster(){ if(!this.ilk){ this.ilk=true; V.menuler=V.menuler||[];
       $("#mn_foto").onclick=async()=>{ const f=await gorselSec(true); if(f) this.dosya(f); }; $("#mn_galeri").onclick=async()=>{ const f=await gorselSec(false); if(f) this.dosya(f); };
@@ -3690,7 +3706,11 @@ SAYFA.menu={ ilk:false,
         let u=dt.getData("text/uri-list")||""; if(!u){ const h=dt.getData("text/html")||""; const m=h.match(/<img[^>]+src="([^"]+)"/i); if(m) u=m[1]; }
         u=u.split("\n")[0].trim(); if(u){ try{ const r=await fetch(u); const b=await r.blob(); if(/^image\//.test(b.type)){ this.dosya(new File([b],"menu.jpg",{type:b.type})); return; } }catch(_){} }
         toast("Bu resim sürüklenerek alınamadı. Resmi kopyalayıp burada Ctrl+V ile yapıştırın.",1,9000); });
-      document.addEventListener("paste",e=>{ if(AKTIF_SEKME!=="menu") return; const it=[...((e.clipboardData&&e.clipboardData.items)||[])].find(x=>x.kind==="file"&&/^image\//.test(x.type)); if(!it) return; e.preventDefault(); const f=it.getAsFile(); if(f) this.dosya(f); }); }
+      // Excel'den kopyala-yapıştır: önce metin (tarih sütunları + SABAH/ÖĞLEN/İKİNDİ satırları) okunur; olmazsa resim
+      document.addEventListener("paste",e=>{ if(AKTIF_SEKME!=="menu") return; const hd=e.target&&e.target.closest&&e.target.closest("input,textarea,select,.dlg"); if(hd) return;
+        const cd=e.clipboardData; const txt=cd&&cd.getData("text/plain")||""; const gl=txt?menuMetinCoz(txt):[];
+        if(gl.length){ e.preventDefault(); MN.onizle=gl; MN.belge=null; $("#mn_dur").innerHTML="✓ Excel'den "+gl.length+" gün alındı. Kontrol edin, sonra <b>Kaydet</b>."; this.onizleCiz(); return; }
+        const it=[...((cd&&cd.items)||[])].find(x=>x.kind==="file"&&/^image\//.test(x.type)); if(!it){ if(txt) toast("Kopyalanan metinde tarih bulunamadı. Tarih satırıyla birlikte kopyalayın.",1,7000); return; } e.preventDefault(); const f=it.getAsFile(); if(f) this.dosya(f); }); }
     this.onizleCiz(); this.liste(); },
   async dosya(f){ const d=$("#mn_dur");
     try{ const bm=await createImageBitmap(f); const k=Math.min(1,2600/Math.max(bm.width,bm.height)); const c=document.createElement("canvas"); c.width=Math.round(bm.width*k); c.height=Math.round(bm.height*k); c.getContext("2d").drawImage(bm,0,0,c.width,c.height); bm.close&&bm.close();

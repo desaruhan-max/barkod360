@@ -2262,6 +2262,8 @@ SAYFA.cikis = {
 };
 
 /* ================== STOK SAYIMI ================== */
+// sayımın tarihi: elle belirlenmişse o, yoksa başladığı gün (sonradan eklemeler aynı sayımın tarihinde görünür)
+function sayimTarih(k){ if(!k) return ""; if(k.tarih) return k.tarih; const d=new Date(k.bas||k.bit); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 const SY = {kam:null, son:null, sadeceFark:false, ara:"", hedef:{}, grup:null};
 function syAnahtar(barkod, lotId){ return barkod+(lotId?"|"+lotId:""); }
 function syUrunSayilan(s, barkod){ let t=0; for(const k in s.sayilan){ if(s.sayilan[k].barkod===barkod) t+=s.sayilan[k].miktar; } return yuvarla(t); }
@@ -2482,7 +2484,7 @@ function syEkBaslat(id){
   SY.hedef={}; SY.grup=null; SY.son=null; SY.fotolar=[];
   V.aktifSayim={id:uid("s"),ekId:k.id,kres:k.kres,bas:new Date().toISOString(),sayan:k.sayan,not:k.not,sayilan:{},log:[]};
   kaydet(); dlgKapat(); sekme("sayim"); setTimeout(()=>{ syCiz(); SY.kam&&SY.kam.ac(); },60);
-  toast("Ekleme açıldı: okuttuğunuz ürünler "+trTarih(k.bit.slice(0,10))+" sayımına eklenecek"); }
+  toast("Ekleme açıldı: okuttuğunuz ürünler "+trTarih(sayimTarih(k))+" sayımına eklenecek"); }
 function sySatirlar(){
   const s=V.aktifSayim; const bk=new Set(); const onceki=syEkOnceki(s);
   if(!s.ekId) Object.values(V.lotlar).forEach(l=>{ if(l.kres===s.kres && kalanOf(l.id)>0) bk.add(l.barkod); }); // ekte yalnız okutulanlar
@@ -2503,7 +2505,7 @@ function syCiz(){
     gv.innerHTML=`<div class="card"><h3>Yeni sayım başlat · ${esc(aktifKres())}</h3><p class="hint">Rafları sırayla okutun. Her okutma 1 sayılır. Kilo ile tartılan üründe miktarı listede değiştirebilirsiniz. Sayım yarıda kalırsa kaldığı yerden devam eder.</p>
       <div class="fg"><label class="f">Sayımı yapan<input id="sy_sayan" placeholder="Ad soyad"></label><label class="f">Not<input id="sy_not" placeholder="Örn. ay sonu sayımı"></label></div>
       <button class="btn primary" id="syBasla">Sayımı başlat</button></div>
-      <div class="card"><h3>Geçmiş sayımlar</h3>${V.sayimlar.filter(x=>x.kres===aktifKres()).length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Sayan</th><th class="r">Kalem</th><th class="r">Farklı kalem</th><th class="r">Fark tutarı</th><th></th></tr></thead><tbody>${V.sayimlar.filter(x=>x.kres===aktifKres()).slice().reverse().map(x=>`<tr><td>${trTarihSaat(x.bit)}</td><td>${esc(x.sayan||"")}</td><td class="r">${x.satirlar.length}</td><td class="r">${x.satirlar.filter(r=>r.fark).length}</td><td class="r ${x.farkTutar<0?"neg":""}">${tl(x.farkTutar)}</td><td class="act"><button class="btn sm" data-tut="${x.id}">Tutanak${(x.belgeIds||[]).length?" 📷":""}</button> ${x.yalnizKayit?'<span class="pill gh">yalnız kayıt</span>':`<button class="btn sm gold" data-ek="${x.id}">➕ Ekle</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Bu kreşte henüz sayım yapılmadı</div>'}</div>`;
+      <div class="card"><h3>Geçmiş sayımlar</h3>${V.sayimlar.filter(x=>x.kres===aktifKres()).length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Sayan</th><th class="r">Kalem</th><th class="r">Farklı kalem</th><th class="r">Fark tutarı</th><th></th></tr></thead><tbody>${V.sayimlar.filter(x=>x.kres===aktifKres()).slice().reverse().map(x=>`<tr><td><b>${trTarih(sayimTarih(x))}</b>${(x.bit||"").slice(0,10)!==sayimTarih(x)?`<div class="small muted">bitiş ${trTarihSaat(x.bit)}</div>`:""}</td><td>${esc(x.sayan||"")}</td><td class="r">${x.satirlar.length}</td><td class="r">${x.satirlar.filter(r=>r.fark).length}</td><td class="r ${x.farkTutar<0?"neg":""}">${tl(x.farkTutar)}</td><td class="act"><button class="btn sm" data-tut="${x.id}">Tutanak${(x.belgeIds||[]).length?" 📷":""}</button> ${x.yalnizKayit?'<span class="pill gh">yalnız kayıt</span>':`<button class="btn sm gold" data-ek="${x.id}">➕ Ekle</button>`}</td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Bu kreşte henüz sayım yapılmadı</div>'}</div>`;
     $("#syBasla").onclick=()=>{ SY.hedef={}; SY.grup=null; SY.son=null; V.aktifSayim={id:uid("s"),kres:aktifKres(),bas:new Date().toISOString(),sayan:$("#sy_sayan").value.trim(),not:$("#sy_not").value.trim(),sayilan:{},log:[]}; kaydet(); syCiz(); setTimeout(()=>SY.kam&&SY.kam.ac(),50); };
     $$("[data-tut]",gv).forEach(b=>b.onclick=()=>syTutanak(V.sayimlar.find(x=>x.id===b.dataset.tut)));
     $$("[data-ek]",gv).forEach(b=>b.onclick=()=>syEkBaslat(b.dataset.ek));
@@ -2748,16 +2750,16 @@ function syTutanakSktMin(x){ if(x.sktMin) return x.sktMin; const ts=[...String(x
 const SY_RENK_HTML={[XLSX_STIL.kirmizi]:"#f8b4b0",[XLSX_STIL.turuncu]:"#ffc98f",[XLSX_STIL.sari]:"#fff09a",[XLSX_STIL.yesil]:"#cdebd6"};
 async function syTutanakExcel(k,satir,resimli){
   const H=["Sıra",...(resimli?["Resim"]:[]),"Ürün","Marka","Barkod","Birim","Sistem","Sayılan","Koli","Alerjenler","STT/TETT dağılımı","En yakın STT/TETT","Sayım saati","Fark","Birim fiyat","Fark tutarı"];
-  const rows=[[{v:"STOK SAYIM TUTANAĞI · "+k.kres+" · "+trTarihSaat(k.bit)+(k.sayan?" · Sayan: "+k.sayan:""),s:XLSX_STIL.ust}],xlsxRenkAciklama(),H.map(v=>({v,s:XLSX_STIL.baslik}))];
+  const rows=[[{v:"STOK SAYIM TUTANAĞI · "+k.kres+" · Sayım tarihi "+trTarih(sayimTarih(k))+(k.sayan?" · Sayan: "+k.sayan:""),s:XLSX_STIL.ust}],xlsxRenkAciklama(),H.map(v=>({v,s:XLSX_STIL.baslik}))];
   satir.forEach((x,i)=>{ const t=syTutanakSktMin(x); const r=xlsxSktRenk(t); const ft=x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null);
     rows.push(xlsxSatirBoya([i+1,...(resimli?[""]:[]),x.ad,x.marka||"",x.barkod,x.birim||"",x.sistem,x.sayilan,x.koli||"",alerjenHucre(x.barkod,x.ad),x.skt||"",xlsxSktHucre(t),x.sayimSaati?trTarihSaatSn(x.sayimSaati):"",x.fark,x.fiyat!=null?x.fiyat:"",ft!=null?yuvarla(ft):""],r,[])); });
   const resimler=[]; if(resimli){ toast("Resimler hazırlanıyor…"); } for(let i=0;resimli&&i<satir.length;i++){ const v=await xlsxResim(satir[i].barkod); if(v) resimler.push({r:3+i,c:1,veri:v}); }
   rows.push([{v:"Toplam fark: "+tl(k.farkTutar),s:XLSX_STIL.kalin}]);
-  indir("stok sayım "+trTarih((d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()))(new Date(k.bit)))+" "+k.kres+(resimli?" resimli":"")+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,...(resimli?[9]:[]),34,16,16,8,9,9,16,26,30,28,19,9,10,11],satirlar:rows,donuk:3,resimler}]));
+  indir("stok sayım "+trTarih(sayimTarih(k))+" "+k.kres+(resimli?" resimli":"")+".xlsx",xlsxOlustur([{ad:"Sayım tutanağı",sutunlar:[6,...(resimli?[9]:[]),34,16,16,8,9,9,16,26,30,28,19,9,10,11],satirlar:rows,donuk:3,resimler}]));
   toast("Excel dosyası indirildi (İndirilenler)"); }
 function syTutanak(k){
   const satir=syTutanakSira(k.satirlar);
-  const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}${(k.ekler||[]).length?"<br>Sonradan eklenenler: "+k.ekler.map(e=>trTarihSaat(e.t)+" ("+e.kalem+" ürün)").join(", "):""}</p>${(k.belgeIds||[]).length?`<p class="yazdirma">${belgeDugmeleri(k,"data-tbelge")}</p>`:""}
+  const html=`<div class="rapor"><h2 style="margin:0">STOK SAYIM TUTANAĞI</h2><p>${esc(k.kres)} · <b>Sayım tarihi: ${trTarih(sayimTarih(k))}</b> · Başlangıç: ${trTarihSaat(k.bas)} · Bitiş: ${trTarihSaat(k.bit)}<br>Sayımı yapan: ${esc(k.sayan||"—")}${k.not?" · Not: "+esc(k.not):""}${(k.ekler||[]).length?"<br>Sonradan eklenenler: "+k.ekler.map(e=>trTarihSaat(e.t)+" ("+e.kalem+" ürün)").join(", "):""}</p>${(k.belgeIds||[]).length?`<p class="yazdirma">${belgeDugmeleri(k,"data-tbelge")}</p>`:""}
     <table><thead><tr><th>#</th><th>Ürün</th><th>Marka</th><th>Barkod</th><th>Birim</th><th>Sistem</th><th>Sayılan</th><th>Alerjenler</th><th>STT/TETT dağılımı</th><th>Sayım saati</th><th>Fark</th><th>Birim ₺</th><th>Fark ₺</th></tr></thead><tbody>
     ${satir.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.ad)}</td><td>${esc(x.marka)}</td><td>${esc(x.barkod)}</td><td>${esc(x.birim)}</td><td style="text-align:right">${nf(x.sistem)}</td><td style="text-align:right">${nf(x.sayilan)}${x.koli?"<br><small>("+esc(x.koli)+")</small>":""}</td><td class="small">${alerjenMetin(x.barkod,x.ad)?`<span class="pill no">Alerjenler: ${esc(alerjenMetin(x.barkod,x.ad))}</span>`:""}</td><td class="small">${esc(x.skt||"")}${syTutanakSktMin(x)?" "+sktPill(syTutanakSktMin(x)):""}</td><td class="small">${x.sayimSaati?trTarihSaatSn(x.sayimSaati):""}</td><td style="text-align:right">${x.fark>0?"+":""}${nf(x.fark)}</td><td style="text-align:right">${x.fiyat!=null?nf(x.fiyat):""}</td><td style="text-align:right">${x.fark?nf(x.tutar!=null?x.tutar:(x.fiyat!=null?x.fark*x.fiyat:null)):""}</td></tr>`).join("")}
     </tbody><tfoot><tr><td colspan="12" style="text-align:right"><b>Toplam fark</b></td><td style="text-align:right"><b>${tl(k.farkTutar)}</b></td></tr></tfoot></table>
@@ -2776,9 +2778,11 @@ SAYFA.sayim = { goster(){ kresCiz(); if(V.aktifSayim && V.aktifSayim.kres===akti
 /* ================== STOK ================== */
 function stokSatirlari(kapsam){
   const kres=kapsam==="tum"?null:aktifKres(); const m={};
+  const syG={}; for(const k of (V.sayimlar||[])){ if(k.grup) syG[k.grup]=k; for(const e of (k.ekler||[])) if(e.grup) syG[e.grup]=k; }
   const ilkH={}; for(const h of V.hareketler){ if(!h.lotId||!(h.miktar>0)) continue; if(!ilkH[h.lotId]||h.t<ilkH[h.lotId].t) ilkH[h.lotId]=h; }
   const kaynak=l=>{ const h=ilkH[l.id]; const t=trTarih(l.girisTarihi||(h&&h.t)||"").slice(0,5);
     if(h&&h.tur==="GIRIS") return "📦 Mal kabul "+t; if(h&&h.tur==="TRANSFER_GIRIS"){ const n=(l.not||"").replace(/^(Sevk|Transfer):\s*/,""); return "🚚 Sevk"+(n?" ("+(KISA[n]||n)+")":"")+" "+t; }
+    if(h&&h.grup&&syG[h.grup]) return "📋 Sayım "+trTarih(sayimTarih(syG[h.grup])).slice(0,5);
     return "📋 Sayım "+t; };
   for(const l of Object.values(V.lotlar)){ if(kres&&l.kres!==kres) continue; const k=kalanOf(l.id); if(l.red) continue;
     const x=m[l.barkod]||(m[l.barkod]={b:l.barkod,mik:0,deger:0,lot:0,skt:null,bloke:0}); if(k>0){ x.mik+=k; x.deger+=k*(l.fiyat||0); x.lot++; const kk=kaynak(l); const dk=(l.skt||"~")+"|"+kk+"|"+(l.durumNot||""); (x.dag=x.dag||{})[dk]=yuvarla((x.dag[dk]||0)+k); x.kay=x.kay||{}; x.kay[dk]=kk; x.lids=x.lids||{}; (x.lids[dk]=x.lids[dk]||[]).push(l.id); if(l.skt&&(!x.skt||l.skt<x.skt)) x.skt=l.skt; if(l.bloke) x.bloke++; } }

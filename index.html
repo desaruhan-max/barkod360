@@ -1072,7 +1072,7 @@ setInterval(()=>{ try{
   if(document.hidden||FOTO_CEKILIYOR||typeof AKTIF_SEKME==="undefined") return; if(document.querySelector(".dlg-arka.on,#dlg.on,.dlg.on")) return;
   let canli=false; try{ canli=localStorage.getItem("b360canli")==="1"; }catch(_){} if(!canli) return;
   const kam={kabul:()=>typeof KB!=="undefined"&&KB.kam, cikis:()=>typeof CK!=="undefined"&&CK.kam, sayim:()=>typeof SY!=="undefined"&&V.aktifSayim&&V.aktifSayim.kres===aktifKres()&&SY.kam}[AKTIF_SEKME];
-  const k=kam&&kam(); if(!k||k.elleKapali||k._deneme) return; if(!document.body.contains(k.kap)||!k.kap.offsetParent) return;
+  const k=kam&&kam(); if(!k||k.elleKapali||k._deneme||k._aciliyor) return; if(!document.body.contains(k.kap)||!k.kap.offsetParent) return;
   const tr=k.akis&&k.akis.getVideoTracks()[0];
   if(!k.akis||!tr||tr.readyState!=="live"){ k.ac(); }
 }catch(_){} },3000);
@@ -1630,6 +1630,9 @@ class Kamera{
       if(kayitli && d.some(x=>x.deviceId===kayitli)) s.value=kayitli; }catch(e){} }
   durum(m){ this.st.style.display=m?"block":"none"; this.st.textContent=m||""; }
   async ac(){
+    if(this._aciliyor && Date.now()-this._aciliyor<8000) return; this._aciliyor=Date.now();
+    try{ await this._ac(); } finally{ this._aciliyor=0; } }
+  async _ac(){
     if(AKTIF_KAMERA && AKTIF_KAMERA!==this) AKTIF_KAMERA.kapat();
     this.kapat(true);
     let id=$(".kSec",this.kap).value;
@@ -1641,8 +1644,8 @@ class Kamera{
       this.akis=await navigator.mediaDevices.getUserMedia({video:{deviceId:id?{exact:id}:undefined, width:{ideal:1920}, height:{ideal:1080}, facingMode:id?undefined:{ideal:"environment"}},audio:false});
     }catch(e){
       // kamera geçici meşgulse (telefonun kendi kamerası yeni kapandı) birkaç kez yeniden dene; otomatik açmayı KAPATMA
-      if(e.name==="OverconstrainedError"&&id){ try{localStorage.removeItem("b360kamera");}catch(_){} $(".kSec",this.kap).value=""; this._deneme=(this._deneme||0)+1; if(this._deneme<=3){ setTimeout(()=>this.ac(),400); return; } }
-      if(["NotReadableError","AbortError","TrackStartError","OverconstrainedError"].includes(e.name)){ this._deneme=(this._deneme||0)+1; if(this._deneme<=4){ this.durum("Kamera hazırlanıyor… ("+this._deneme+")"); setTimeout(()=>this.ac(),900*this._deneme); return; } }
+      if(e.name==="OverconstrainedError"&&id){ try{localStorage.removeItem("b360kamera");}catch(_){} $(".kSec",this.kap).value=""; this._deneme=(this._deneme||0)+1; if(this._deneme<=3){ setTimeout(()=>{ this._aciliyor=0; this.ac(); },400); return; } }
+      if(["NotReadableError","AbortError","TrackStartError","OverconstrainedError"].includes(e.name)){ this._deneme=(this._deneme||0)+1; if(this._deneme<=4){ this.durum("Kamera hazırlanıyor… ("+this._deneme+")"); setTimeout(()=>{ this._aciliyor=0; this.ac(); },900*this._deneme); return; } }
       this._deneme=0;
       if(e.name==="NotAllowedError"){ try{localStorage.removeItem("b360canli");}catch(_){} }
       if(ARTIFACT && e.name!=="NotFoundError"){ $(".canli",this.kap).classList.add("gizli"); toast("Canlı kamera bu ekranda açılmıyor. 📸 Fotoğraf çek ile devam edin.",1); }

@@ -1066,6 +1066,16 @@ function gorselYukle(kap){ $$("img[data-g]",kap||document).forEach(i=>{ const u=
 // Telefonun kendi kamerası açılırken canlı barkod kamerasını kapat (ikisi aynı anda kamerayı kullanamaz); dönünce yeniden aç
 let FOTO_CEKILIYOR=0, FOTO_SONRA_AC=null;
 function fotoOncesi(){ FOTO_CEKILIYOR=Date.now(); if(AKTIF_KAMERA&&AKTIF_KAMERA.akis){ FOTO_SONRA_AC=AKTIF_KAMERA; AKTIF_KAMERA.kapat(); } }
+// Bekçi: okutma ekranında kamera açık olmalıyken kapanmışsa (telefonun kamerası, ekran kilidi, hata) kendiliğinden yeniden aç
+setInterval(()=>{ try{
+  if(FOTO_CEKILIYOR && Date.now()-FOTO_CEKILIYOR>90000){ FOTO_CEKILIYOR=0; FOTO_SONRA_AC=null; }
+  if(document.hidden||FOTO_CEKILIYOR||typeof AKTIF_SEKME==="undefined") return; if(document.querySelector(".dlg-arka.on,#dlg.on,.dlg.on")) return;
+  let canli=false; try{ canli=localStorage.getItem("b360canli")==="1"; }catch(_){} if(!canli) return;
+  const kam={kabul:()=>typeof KB!=="undefined"&&KB.kam, cikis:()=>typeof CK!=="undefined"&&CK.kam, sayim:()=>typeof SY!=="undefined"&&V.aktifSayim&&V.aktifSayim.kres===aktifKres()&&SY.kam}[AKTIF_SEKME];
+  const k=kam&&kam(); if(!k||k.elleKapali||k._deneme) return; if(!document.body.contains(k.kap)||!k.kap.offsetParent) return;
+  const tr=k.akis&&k.akis.getVideoTracks()[0];
+  if(!k.akis||!tr||tr.readyState!=="live"){ k.ac(); }
+}catch(_){} },3000);
 function fotoSonrasi(){ setTimeout(()=>{ FOTO_CEKILIYOR=0; const k=FOTO_SONRA_AC; FOTO_SONRA_AC=null; if(k&&!AKTIF_KAMERA&&document.body.contains(k.kap)) k.ac(); },900); }
 document.addEventListener("click",e=>{ const t=e.target; const inp=t&&(t.matches&&t.matches('input[type="file"]')?t:(t.closest&&t.closest("label")&&t.closest("label").querySelector('input[type="file"]'))); if(inp){ fotoOncesi(); inp.addEventListener("change",fotoSonrasi,{once:true}); } },true);
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&FOTO_CEKILIYOR&&Date.now()-FOTO_CEKILIYOR>1500) fotoSonrasi(); });
@@ -1598,7 +1608,7 @@ class Kamera{
       <label class="f">Barkod no (elle / USB-Bluetooth barkod okuyucu)<span class="inrow"><input class="kManuel" inputmode="numeric" autocomplete="off" placeholder="8690000000000"><button class="btn sm kAra">Bul</button></span></label>`;
     this.v=$("video",this.kap); this.camEl=$(".cam",this.kap); this.st=$(".st",this.kap);
     $(".kAc",this.kap).onclick=()=>this.ac();
-    $(".kKapat",this.kap).onclick=()=>this.kapat();
+    $(".kKapat",this.kap).onclick=()=>{ this.elleKapali=true; this.kapat(); };
     $(".kSec",this.kap).onchange=e=>{ try{localStorage.setItem("b360kamera",e.target.value);}catch(_){} if(this.akis) this.ac(); };
     const fb=$(".kFoto",this.kap); if(fb) fb.onclick=()=>this.fotoCek();
     const kbs=$(".kBarkodsuz",this.kap); if(kbs) kbs.onclick=()=>this.o.onBarkodsuz();
@@ -1629,10 +1639,15 @@ class Kamera{
         if(arka.length){ arka.sort((a,b)=>a.label.localeCompare(b.label,undefined,{numeric:true})); id=arka[0].deviceId; } }catch(_){} }
     try{
       this.akis=await navigator.mediaDevices.getUserMedia({video:{deviceId:id?{exact:id}:undefined, width:{ideal:1920}, height:{ideal:1080}, facingMode:id?undefined:{ideal:"environment"}},audio:false});
-    }catch(e){ try{localStorage.removeItem("b360canli");}catch(_){}
+    }catch(e){
+      // kamera geçici meşgulse (telefonun kendi kamerası yeni kapandı) birkaç kez yeniden dene; otomatik açmayı KAPATMA
+      if(e.name==="OverconstrainedError"&&id){ try{localStorage.removeItem("b360kamera");}catch(_){} $(".kSec",this.kap).value=""; this._deneme=(this._deneme||0)+1; if(this._deneme<=3){ setTimeout(()=>this.ac(),400); return; } }
+      if(["NotReadableError","AbortError","TrackStartError","OverconstrainedError"].includes(e.name)){ this._deneme=(this._deneme||0)+1; if(this._deneme<=4){ this.durum("Kamera hazırlanıyor… ("+this._deneme+")"); setTimeout(()=>this.ac(),900*this._deneme); return; } }
+      this._deneme=0;
+      if(e.name==="NotAllowedError"){ try{localStorage.removeItem("b360canli");}catch(_){} }
       if(ARTIFACT && e.name!=="NotFoundError"){ $(".canli",this.kap).classList.add("gizli"); toast("Canlı kamera bu ekranda açılmıyor. 📸 Fotoğraf çek ile devam edin.",1); }
       else toast("Kamera açılamadı: "+(e.name==="NotAllowedError"?"izin verilmedi":e.name==="NotFoundError"?"kamera bulunamadı":e.message),1); return; }
-    try{localStorage.setItem("b360canli","1");}catch(_){}
+    try{localStorage.setItem("b360canli","1");}catch(_){} this._deneme=0; this.elleKapali=false;
     this.v.srcObject=this.akis; await this.v.play().catch(()=>{});
     $(".bos",this.kap).style.display="none"; this.camEl.classList.add("acik"); AKTIF_KAMERA=this; this.calisiyor=true;
     this.durum("Barkodu çerçeveye tutun"); this.listele();

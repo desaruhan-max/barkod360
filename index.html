@@ -518,7 +518,7 @@ img[data-g],.dlg img{cursor:zoom-in}
       <input id="imAra" placeholder="Ürün / parti ara" style="font-size:14px;flex:1;min-width:140px">
       <button class="btn sm" id="imTum">Tüm geçmiş</button>
     </div>
-    <p class="hint"><b>Tutanak dosyasını ilgili satırın üstüne sürükleyip bırakın</b> ya da satırdaki düğmeden ekleyin. Stok Durumu ya da STT / TETT sayfasında <b>İmha</b>'ya basınca kayıt buraya düşer. Her kayda imha sebebi ve imha tutanağının fotoğrafı eklenir.</p>
+    <p class="hint"><b>Tutanak dosyasını (Word, PDF ya da resim) ilgili satırın üstüne sürükleyip bırakın</b> ya da satırdaki düğmeden ekleyin. Stok Durumu ya da STT / TETT sayfasında <b>İmha</b>'ya basınca kayıt buraya düşer. Her kayda imha sebebi ve imha tutanağının fotoğrafı eklenir.</p>
     <div id="imListe"></div>
     <div style="margin-top:8px"><button class="btn sm" id="imTopluBtn">Seçililere sebep / tutanak ekle</button></div>
   </div>
@@ -933,7 +933,7 @@ async function fotoYukle(){
   if(!SENK.assets) return;
   const isle=async(ent, alan)=>{ const ids=(Array.isArray(ent[alan])?ent[alan]:(ent[alan]?[ent[alan]]:[]))||[]; ent.fotoAsset=ent.fotoAsset||{}; let deg=false;
     for(const id of ids){ if(ent.fotoAsset[id]) continue; const d=await DB.al("foto:"+id); if(!d) continue;
-      const blob=await (await fetch(d)).blob(); const r=await zamanAsimi(SENK.assets.upload(blob),60000); ent.fotoAsset[id]=r.id; deg=true; }
+      const blob=await (await fetch(d)).blob(); const mt=(ent.belgeMeta||{})[id]; const r=await zamanAsimi(SENK.assets.upload(blob,mt&&mt.uz),60000); ent.fotoAsset[id]=r.id; deg=true; }
     return deg; };
   let deg=false;
   for(const l of Object.values(V.lotlar)) if((l.fotoIds||[]).length && (await isle(l,"fotoIds"))) deg=true;
@@ -984,7 +984,7 @@ const GH = { ayar:null, sha:{}, okunan:{}, zam:null,
 async function ghBaslat(){
   await GH.ayarAl(); if(!GH.ayar){ SENK.db=null; SENK.assets=null; senkGoster(); return; }
   SENK.db={ doc:p=>({ set:o=>GH.yaz(p+".json", GH.b64(JSON.stringify(o))) }) };
-  SENK.assets={ upload:async blob=>{ const id="foto/"+uid("g")+".jpg"; await GH.yaz(id, await GH.b64blob(blob)); return {id:"gh:"+id}; } };
+  SENK.assets={ upload:async (blob,ext)=>{ const id="foto/"+uid("g")+"."+(ext||"jpg"); await GH.yaz(id, await GH.b64blob(blob)); return {id:"gh:"+id}; } };
   if(!GH.ayar.ilkGonderim){ SENK.SON={}; senkFark(); GH.ayar.ilkGonderim=new Date().toISOString(); await DB.yaz("ghAyar",GH.ayar); } // bu cihazdaki eski kayıtlar da bir kez gönderilir
   const tur=async()=>{ try{ await GH.cek(); if(SENK.durum!=="dolu") SENK.durum="ok"; SENK.son=simdiSaat(); }catch(e){ SENK.durum=e.code==="yetki"?"yetki":"cevrimdisi"; console.warn("çekme",e); } senkGoster(); senkCalis(); };
   if(!GH.zam){ window.addEventListener("online",()=>{ senkGoster(); tur(); }); window.addEventListener("offline",senkGoster);
@@ -1062,7 +1062,7 @@ async function fotoKaydet(canvas, maks=1100, kalite=.72){
 }
 async function fotoAl(id, ent){ if(!id) return null; let d=null; try{ d=await DB.al("foto:"+id); }catch(e){} if(d) return d;
   const a=ent&&ent.fotoAsset&&ent.fotoAsset[id]; if(!a) return null;
-  if(String(a).startsWith("gh:")){ try{ const r=await GH.oku(a.slice(3)); const b=await r.blob(); d=await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); }); d=d.replace(/^data:[^;]*;/,"data:image/jpeg;"); await DB.yaz("foto:"+id,d); return d; }catch(e){ return null; } }
+  if(String(a).startsWith("gh:")){ try{ const r=await GH.oku(a.slice(3)); const b=await r.blob(); d=await new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(b); }); { const mt=(ent.belgeMeta||{})[id]; d=d.replace(/^data:[^;]*;/,"data:"+(mt&&mt.tip||"image/jpeg")+";"); } await DB.yaz("foto:"+id,d); return d; }catch(e){ return null; } }
   return "/_blob/"+a; }
 
 /* ===== ÜRÜN GÖRSELİ + TAM ÜRÜN BİLGİSİ ===== */
@@ -1087,7 +1087,17 @@ document.addEventListener("click",e=>{ const i=e.target.closest&&e.target.closes
   if(!i.src||i.style.visibility==="hidden"||i.style.display==="none"||(i.naturalWidth||0)<2) return; e.preventDefault(); e.stopPropagation(); resimBuyut(i.src); }, true);
 // kayıtlara bağlı belge fotoğrafları (sayım kâğıdı, sevk formu): {belgeIds:[...], fotoAsset:{id:"gh:..."}}
 function belgeDugmeleri(rec, attr){ const ids=(rec&&rec.belgeIds)||[]; return ids.map((id,i)=>`<button type="button" class="btn sm" ${attr}="${esc(id)}">📷 Belge${ids.length>1?" "+(i+1):""}</button>`).join(" "); }
-async function belgeAc(rec,id){ const d=await fotoAl(id,rec); if(d) resimBuyut(d); else toast("Belge açılamadı (internet gerekli olabilir)",1); }
+async function belgeAc(rec,id){ const d=await fotoAl(id,rec); if(!d){ toast("Belge açılamadı (internet gerekli olabilir)",1); return; }
+  const mt=(rec.belgeMeta||{})[id]; if(!mt||/^image\//.test(mt.tip||"")){ resimBuyut(d); return; }
+  const bl=await (await fetch(d)).blob(); const u=URL.createObjectURL(bl);
+  if(mt.tip==="application/pdf"){ window.open(u,"_blank"); } else { const a=document.createElement("a"); a.href=u; a.download=mt.ad||"belge"; document.body.appendChild(a); a.click(); a.remove(); }
+  setTimeout(()=>URL.revokeObjectURL(u),60000); }
+// resim dışı belge (PDF, Word): dosya olduğu gibi saklanır; {id, ad, tip, uz} döner
+async function belgeDosyaKaydet(f){ if(/^image\//.test(f.type)) return {id:await gorselKaydet(f)};
+  if(f.size>15*1024*1024) throw new Error("Dosya 15 MB'tan büyük");
+  const uz=((f.name.match(/\.([A-Za-z0-9]{2,5})$/)||[])[1]||"bin").toLowerCase(); const tip=f.type||({pdf:"application/pdf",doc:"application/msword",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"})[uz]||"application/octet-stream";
+  const d=await new Promise((res,rej)=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(f); }); const id=uid("f"); await DB.yaz("foto:"+id,d); return {id,ad:f.name,tip,uz}; }
+function dosyaSec(){ fotoOncesi(); return new Promise(res=>{ const i=document.createElement("input"); i.type="file"; i.multiple=true; i.accept="image/*,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"; i.onchange=()=>{ fotoSonrasi(); res([...i.files]); }; i.click(); }); }
 function gorselYukle(kap){ $$("img[data-g]",kap||document).forEach(i=>{ const u=V.urunler[i.dataset.g]; urunGorsel(u).then(d=>{ if(d){ i.src=d; i.style.visibility="visible"; i.style.display=""; } }); }); }
 // Telefonun kendi kamerası açılırken canlı barkod kamerasını kapat (ikisi aynı anda kamerayı kullanamaz); dönünce yeniden aç
 let FOTO_CEKILIYOR=0, FOTO_SONRA_AC=null;
@@ -3796,7 +3806,7 @@ function imhaHareketleri(){ return V.hareketler.filter(h=>h.tur==="IMHA"&&!h.ter
 function imhaGunu(h){ if(h.tarih) return h.tarih; const d=new Date(h.t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 // imha kaydına sebep, tarih ve tutanak fotoğrafı ekler (bir ya da birkaç kayıt için)
 function imhaDuzenle(ids,sonra){ const hs=ids.map(i=>V.hareketler.find(h=>h.id===i)).filter(Boolean); if(!hs.length) return; const h0=hs[0];
-  const u=V.urunler[h0.barkod]||{}; let sebep=h0.sebep||""; const yeni=[], silinen=new Set();
+  const u=V.urunler[h0.barkod]||{}; let sebep=h0.sebep||""; const yeni=[], silinen=new Set(), yMeta={};
   const mevcut=()=>{ const s=[]; hs.forEach(h=>(h.belgeIds||[]).forEach(id=>{ if(!s.some(x=>x.id===id)&&!silinen.has(id)) s.push({id,h}); })); return s; };
   const b=dlg("İmha sebebi ve tutanak",`<p class="small">${hs.length>1?"<b>"+hs.length+" imha kaydı</b> seçildi (aynı sebep ve tutanak hepsine eklenir)":"<b>"+esc(u.ad||h0.barkod)+"</b> · "+esc(KISA[h0.kres]||h0.kres)+" · "+nf(-h0.miktar,3)+" "+esc(u.birim||"")}</p>
     <label class="f">İmha tarihi<input id="imd_t" inputmode="numeric" value="${trTarih(imhaGunu(h0))}" style="font-size:16px"></label>
@@ -3805,21 +3815,21 @@ function imhaDuzenle(ids,sonra){ const hs=ids.map(i=>V.hareketler.find(h=>h.id==
     <label class="f">İmha tutanak no<input id="imd_n" value="${esc(h0.tutanakNo||"")}" style="font-size:16px"></label>
     <div class="small muted" style="margin-top:6px">İmha tutanağı (fotoğraf)</div>
     <div id="imd_g" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0"></div>
-    <div id="imd_drop" style="border:2px dashed #c4493f;border-radius:10px;padding:16px;text-align:center;margin:6px 0;color:#8c2b2b;font-weight:600">⬇ Tutanak dosyasını buraya sürükleyip bırakın<div class="small muted" style="font-weight:400">(ya da Ctrl+V ile yapıştırın)</div></div>
-    <div class="inrow" style="gap:8px"><button type="button" class="btn" id="imd_cek">📸 Fotoğraf çek</button><button type="button" class="btn" id="imd_sec">🖼 Dosyadan seç</button></div>
+    <div id="imd_drop" style="border:2px dashed #c4493f;border-radius:10px;padding:16px;text-align:center;margin:6px 0;color:#8c2b2b;font-weight:600">⬇ Tutanak dosyasını buraya sürükleyip bırakın<div class="small muted" style="font-weight:400">Word, PDF ya da resim · Ctrl+V ile de yapıştırılır</div></div>
+    <div class="inrow" style="gap:8px"><button type="button" class="btn" id="imd_cek">📸 Fotoğraf çek</button><button type="button" class="btn" id="imd_sec">📎 Dosya seç (Word / PDF / resim)</button></div>
     <p id="imd_h" class="neg" style="display:none;font-weight:700"></p>`,
     [{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const t=tarihCoz($("#imd_t",b).value); if(!t){ const e=$("#imd_h",b); e.textContent="⚠ Tarihi gg.aa.yyyy yazın"; e.style.display="block"; return false; }
       for(const h of hs){ h.tarih=t; h.sebep=sebep||undefined; h.ack=$("#imd_a",b).value.trim(); h.tutanakNo=$("#imd_n",b).value.trim()||undefined;
-        h.belgeIds=(h.belgeIds||[]).filter(id=>!silinen.has(id)).concat(yeni.filter(id=>!(h.belgeIds||[]).includes(id))); if(!h.belgeIds.length) delete h.belgeIds; }
+        h.belgeIds=(h.belgeIds||[]).filter(id=>!silinen.has(id)).concat(yeni.filter(id=>!(h.belgeIds||[]).includes(id))); if(!h.belgeIds.length) delete h.belgeIds; if(Object.keys(yMeta).length){ h.belgeMeta=Object.assign({},h.belgeMeta||{}); for(const id of yeni) if(yMeta[id]) h.belgeMeta[id]=yMeta[id]; } }
       kaydet(); toast("İmha kaydı güncellendi"); sonra&&sonra(); }}],true);
   tarihMaske($("#imd_t",b));
   const ciz=async()=>{ const g=$("#imd_g",b); g.innerHTML=""; const liste=mevcut().map(x=>({id:x.id,ent:x.h})).concat(yeni.map(id=>({id,ent:null})));
-    for(const x of liste){ const w=document.createElement("div"); w.style.cssText="position:relative"; const im=document.createElement("img"); im.style.cssText="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #ccc"; im.dataset.buyut="1";
+    for(const x of liste){ const w=document.createElement("div"); w.style.cssText="position:relative"; const mt=(x.ent&&(x.ent.belgeMeta||{})[x.id])||yMeta[x.id]; const dok=mt&&!/^image\//.test(mt.tip||""); const im=document.createElement(dok?"div":"img"); if(dok){ im.style.cssText="width:90px;height:90px;border-radius:8px;border:1px solid #ccc;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;padding:4px;text-align:center;overflow:hidden;word-break:break-all"; im.innerHTML="<span style='font-size:26px'>"+(mt.tip==="application/pdf"?"📕":"📄")+"</span>"+esc(mt.ad||"belge"); } else { im.style.cssText="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #ccc"; im.dataset.buyut="1"; }
       const x2=document.createElement("button"); x2.type="button"; x2.textContent="✕"; x2.style.cssText="position:absolute;top:-6px;right:-6px;border-radius:50%;width:24px;height:24px;border:0;background:#c4493f;color:#fff"; x2.onclick=()=>{ if(x.ent) silinen.add(x.id); else yeni.splice(yeni.indexOf(x.id),1); ciz(); };
-      w.appendChild(im); w.appendChild(x2); g.appendChild(w); fotoAl(x.id,x.ent).then(d=>{ if(d) im.src=d; }); }
+      w.appendChild(im); w.appendChild(x2); g.appendChild(w); if(!dok) fotoAl(x.id,x.ent).then(d=>{ if(d) im.src=d; }); }
     if(!liste.length) g.innerHTML='<span class="small muted">Henüz tutanak fotoğrafı yok</span>'; };
-  const ekle=async kam=>{ const f=await gorselSec(kam); if(!f) return; try{ yeni.push(await gorselKaydet(f)); ciz(); }catch(e){ toast("Fotoğraf eklenemedi",1); } };
-  const dosyalar=async fl=>{ let n=0; for(const f of fl){ if(!/^image\//.test(f.type)){ toast("Yalnız resim dosyası (jpg, png) eklenebilir",1); continue; } try{ yeni.push(await gorselKaydet(f)); n++; }catch(e){ toast("Dosya eklenemedi",1); } } if(n){ ciz(); toast(n+" tutanak eklendi — Kaydet'e basın"); } };
+  const ekle=async kam=>{ if(kam){ const f=await gorselSec(true); if(f) await dosyalar([f]); } else { const fl=await dosyaSec(); if(fl.length) await dosyalar(fl); } };
+  const dosyalar=async fl=>{ let n=0; for(const f of fl){ try{ const r=await belgeDosyaKaydet(f); yeni.push(r.id); if(r.tip) yMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; n++; }catch(e){ toast("Dosya eklenemedi: "+(e&&e.message||e),1); } } if(n){ ciz(); toast(n+" tutanak eklendi — Kaydet'e basın"); } };
   const dz=$("#imd_drop",b); ["dragenter","dragover"].forEach(o=>dz.addEventListener(o,e=>{ e.preventDefault(); dz.style.background="#fbe9e7"; })); ["dragleave","drop"].forEach(o=>dz.addEventListener(o,e=>{ e.preventDefault(); dz.style.background=""; }));
   dz.addEventListener("drop",e=>{ dosyalar([...(e.dataTransfer&&e.dataTransfer.files||[])]); }); dz.onclick=()=>ekle(false);
   b.addEventListener("paste",e=>{ const fl=[...(e.clipboardData&&e.clipboardData.files||[])]; if(fl.length){ e.preventDefault(); dosyalar(fl); } });
@@ -3843,12 +3853,12 @@ SAYFA.imha = {
       ${r.map(h=>{ const l=V.lotlar[h.lotId]||{}, u=V.urunler[h.barkod]||{}; const bl=(h.belgeIds||[]);
         return `<tr><td><input type="checkbox" data-ims="${esc(h.id)}"></td><td class="m">${trTarih(imhaGunu(h))}<div class="small muted">${esc(trTarihSaat(h.t).slice(11))}</div></td><td class="m">${esc(KISA[h.kres]||h.kres)}</td><td>${esc(urunAd(h.barkod))}</td><td>${esc(l.lot&&l.lot!=="SAYIM"?l.lot:"—")}<div class="small muted">${l.skt?(l.sktTur||"STT")+" "+trTarih(l.skt):""}</div></td><td class="r"><b>${nf(-h.miktar,3)}</b> ${esc(u.birim||"")}</td><td class="r">${h.fiyat!=null?tl(-h.miktar*h.fiyat):""}</td>
         <td>${h.sebep?"<b>"+esc(h.sebep)+"</b>":'<span class="pill no">sebep yok</span>'}${h.ack?'<div class="small muted">'+esc(h.ack)+"</div>":""}</td>
-        <td>${bl.length?bl.map((id,i)=>`<button type="button" class="btn sm" data-imb="${esc(id)}" data-imh="${esc(h.id)}">📷 Tutanak${bl.length>1?" "+(i+1):""}</button>`).join(" "):'<span class="pill bad">tutanak yok</span>'}${h.tutanakNo?'<div class="small muted">No: '+esc(h.tutanakNo)+"</div>":""}</td>
+        <td>${bl.length?bl.map((id,i)=>`<button type="button" class="btn sm" data-imb="${esc(id)}" data-imh="${esc(h.id)}">${(h.belgeMeta||{})[id]&&!/^image\//.test(h.belgeMeta[id].tip)?"📄":"📷"} Tutanak${bl.length>1?" "+(i+1):""}</button>`).join(" "):'<span class="pill bad">tutanak yok</span>'}${h.tutanakNo?'<div class="small muted">No: '+esc(h.tutanakNo)+"</div>":""}</td>
         <td class="act"><button class="btn sm primary" data-imd="${esc(h.id)}">✎ Sebep / Tutanak</button></td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bu aralıkta imha kaydı yok. Geçmişi görmek için "Tüm geçmiş"e basın.</div>';
     $$("#imListe tbody tr").forEach(tr=>{ const id=(tr.querySelector("[data-imd]")||{dataset:{}}).dataset.imd; if(!id) return;
       ["dragenter","dragover"].forEach(o=>tr.addEventListener(o,e=>{ e.preventDefault(); tr.style.outline="2px dashed #c4493f"; })); ["dragleave","drop"].forEach(o=>tr.addEventListener(o,e=>{ e.preventDefault(); tr.style.outline=""; }));
-      tr.addEventListener("drop",async e=>{ const h=V.hareketler.find(z=>z.id===id); const fl=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(f=>/^image\//.test(f.type)); if(!h||!fl.length){ toast("Resim dosyasını bırakın (jpg, png)",1); return; }
-        for(const f of fl){ try{ (h.belgeIds=h.belgeIds||[]).push(await gorselKaydet(f)); }catch(_){ toast("Dosya eklenemedi",1); } } kaydet(); toast("Tutanak kayda eklendi"); this.goster(); }); });
+      tr.addEventListener("drop",async e=>{ const h=V.hareketler.find(z=>z.id===id); const fl=[...(e.dataTransfer&&e.dataTransfer.files||[])]; if(!h||!fl.length){ toast("Dosyayı satırın üstüne bırakın",1); return; }
+        for(const f of fl){ try{ const r=await belgeDosyaKaydet(f); (h.belgeIds=h.belgeIds||[]).push(r.id); if(r.tip){ h.belgeMeta=Object.assign({},h.belgeMeta||{}); h.belgeMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; } }catch(er){ toast("Dosya eklenemedi: "+(er&&er.message||er),1); } } kaydet(); toast("Tutanak kayda eklendi"); this.goster(); }); });
     $$("#imListe [data-imd]").forEach(x=>x.onclick=()=>imhaDuzenle([x.dataset.imd],()=>this.goster()));
     $$("#imListe [data-imb]").forEach(x=>x.onclick=()=>{ const h=V.hareketler.find(z=>z.id===x.dataset.imh); if(h) belgeAc(h,x.dataset.imb); }); },
   excel(){ const r=this._r||[]; if(!r.length){ toast("İmha kaydı yok",1); return; }

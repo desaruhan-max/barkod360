@@ -518,7 +518,7 @@ img[data-g],.dlg img{cursor:zoom-in}
       <input id="imAra" placeholder="Ürün / parti ara" style="font-size:14px;flex:1;min-width:140px">
       <button class="btn sm" id="imTum">Tüm geçmiş</button>
     </div>
-    <p class="hint">Stok Durumu ya da STT / TETT sayfasında <b>İmha</b>'ya basınca kayıt buraya düşer. Her kayda imha sebebi ve imha tutanağının fotoğrafı eklenir.</p>
+    <p class="hint"><b>Tutanak dosyasını ilgili satırın üstüne sürükleyip bırakın</b> ya da satırdaki düğmeden ekleyin. Stok Durumu ya da STT / TETT sayfasında <b>İmha</b>'ya basınca kayıt buraya düşer. Her kayda imha sebebi ve imha tutanağının fotoğrafı eklenir.</p>
     <div id="imListe"></div>
     <div style="margin-top:8px"><button class="btn sm" id="imTopluBtn">Seçililere sebep / tutanak ekle</button></div>
   </div>
@@ -3805,6 +3805,7 @@ function imhaDuzenle(ids,sonra){ const hs=ids.map(i=>V.hareketler.find(h=>h.id==
     <label class="f">İmha tutanak no<input id="imd_n" value="${esc(h0.tutanakNo||"")}" style="font-size:16px"></label>
     <div class="small muted" style="margin-top:6px">İmha tutanağı (fotoğraf)</div>
     <div id="imd_g" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0"></div>
+    <div id="imd_drop" style="border:2px dashed #c4493f;border-radius:10px;padding:16px;text-align:center;margin:6px 0;color:#8c2b2b;font-weight:600">⬇ Tutanak dosyasını buraya sürükleyip bırakın<div class="small muted" style="font-weight:400">(ya da Ctrl+V ile yapıştırın)</div></div>
     <div class="inrow" style="gap:8px"><button type="button" class="btn" id="imd_cek">📸 Fotoğraf çek</button><button type="button" class="btn" id="imd_sec">🖼 Dosyadan seç</button></div>
     <p id="imd_h" class="neg" style="display:none;font-weight:700"></p>`,
     [{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const t=tarihCoz($("#imd_t",b).value); if(!t){ const e=$("#imd_h",b); e.textContent="⚠ Tarihi gg.aa.yyyy yazın"; e.style.display="block"; return false; }
@@ -3818,6 +3819,10 @@ function imhaDuzenle(ids,sonra){ const hs=ids.map(i=>V.hareketler.find(h=>h.id==
       w.appendChild(im); w.appendChild(x2); g.appendChild(w); fotoAl(x.id,x.ent).then(d=>{ if(d) im.src=d; }); }
     if(!liste.length) g.innerHTML='<span class="small muted">Henüz tutanak fotoğrafı yok</span>'; };
   const ekle=async kam=>{ const f=await gorselSec(kam); if(!f) return; try{ yeni.push(await gorselKaydet(f)); ciz(); }catch(e){ toast("Fotoğraf eklenemedi",1); } };
+  const dosyalar=async fl=>{ let n=0; for(const f of fl){ if(!/^image\//.test(f.type)){ toast("Yalnız resim dosyası (jpg, png) eklenebilir",1); continue; } try{ yeni.push(await gorselKaydet(f)); n++; }catch(e){ toast("Dosya eklenemedi",1); } } if(n){ ciz(); toast(n+" tutanak eklendi — Kaydet'e basın"); } };
+  const dz=$("#imd_drop",b); ["dragenter","dragover"].forEach(o=>dz.addEventListener(o,e=>{ e.preventDefault(); dz.style.background="#fbe9e7"; })); ["dragleave","drop"].forEach(o=>dz.addEventListener(o,e=>{ e.preventDefault(); dz.style.background=""; }));
+  dz.addEventListener("drop",e=>{ dosyalar([...(e.dataTransfer&&e.dataTransfer.files||[])]); }); dz.onclick=()=>ekle(false);
+  b.addEventListener("paste",e=>{ const fl=[...(e.clipboardData&&e.clipboardData.files||[])]; if(fl.length){ e.preventDefault(); dosyalar(fl); } });
   $("#imd_cek",b).onclick=()=>ekle(true); $("#imd_sec",b).onclick=()=>ekle(false);
   $$("#imd_s button",b).forEach(x=>x.onclick=()=>{ sebep=sebep===x.dataset.s?"":x.dataset.s; $$("#imd_s button",b).forEach(y=>y.classList.toggle("on",y.dataset.s===sebep)); });
   ciz(); }
@@ -3840,6 +3845,10 @@ SAYFA.imha = {
         <td>${h.sebep?"<b>"+esc(h.sebep)+"</b>":'<span class="pill no">sebep yok</span>'}${h.ack?'<div class="small muted">'+esc(h.ack)+"</div>":""}</td>
         <td>${bl.length?bl.map((id,i)=>`<button type="button" class="btn sm" data-imb="${esc(id)}" data-imh="${esc(h.id)}">📷 Tutanak${bl.length>1?" "+(i+1):""}</button>`).join(" "):'<span class="pill bad">tutanak yok</span>'}${h.tutanakNo?'<div class="small muted">No: '+esc(h.tutanakNo)+"</div>":""}</td>
         <td class="act"><button class="btn sm primary" data-imd="${esc(h.id)}">✎ Sebep / Tutanak</button></td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bu aralıkta imha kaydı yok. Geçmişi görmek için "Tüm geçmiş"e basın.</div>';
+    $$("#imListe tbody tr").forEach(tr=>{ const id=(tr.querySelector("[data-imd]")||{dataset:{}}).dataset.imd; if(!id) return;
+      ["dragenter","dragover"].forEach(o=>tr.addEventListener(o,e=>{ e.preventDefault(); tr.style.outline="2px dashed #c4493f"; })); ["dragleave","drop"].forEach(o=>tr.addEventListener(o,e=>{ e.preventDefault(); tr.style.outline=""; }));
+      tr.addEventListener("drop",async e=>{ const h=V.hareketler.find(z=>z.id===id); const fl=[...(e.dataTransfer&&e.dataTransfer.files||[])].filter(f=>/^image\//.test(f.type)); if(!h||!fl.length){ toast("Resim dosyasını bırakın (jpg, png)",1); return; }
+        for(const f of fl){ try{ (h.belgeIds=h.belgeIds||[]).push(await gorselKaydet(f)); }catch(_){ toast("Dosya eklenemedi",1); } } kaydet(); toast("Tutanak kayda eklendi"); this.goster(); }); });
     $$("#imListe [data-imd]").forEach(x=>x.onclick=()=>imhaDuzenle([x.dataset.imd],()=>this.goster()));
     $$("#imListe [data-imb]").forEach(x=>x.onclick=()=>{ const h=V.hareketler.find(z=>z.id===x.dataset.imh); if(h) belgeAc(h,x.dataset.imb); }); },
   excel(){ const r=this._r||[]; if(!r.length){ toast("İmha kaydı yok",1); return; }

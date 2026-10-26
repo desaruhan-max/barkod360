@@ -3802,12 +3802,12 @@ SAYFA.menu={ ilk:false,
 
 /* ================== İMHA KAYITLARI ================== */
 const IMHA_SEBEPLER=["Tarihi geçti (STT/TETT)","Bozuk / küflenmiş / kokmuş","Böceklenme / haşere bulaşması","Ambalaj hasarlı","Soğuk zincir bozuldu","Geri çağırma / bloke","Kabul edilmedi / yanlış ürün","Diğer"];
-function imhaSebep(h){ return h.sebep||(/tarih[iı]?\s*ge[cç]|ge[cç]ti|ge[cç]mi[sş]/i.test((h.ack||"").replace(/İ/g,"i"))?IMHA_SEBEPLER[0]:""); }
+function imhaSebep(h){ return h.sebep||(/tarih[iı]?\s*ge[cç]|ge[cç]ti|ge[cç]mi[sş]/i.test((h.ack||"").replace(/İ/g,"i"))?IMHA_SEBEPLER[0]:((h.belgeIds||[]).length?"Sebep imha tutanağında belirtilmiştir":"")); }
 function imhaHareketleri(){ return V.hareketler.filter(h=>h.tur==="IMHA"&&!h.tersId); }
 function imhaGunu(h){ if(h.tarih) return h.tarih; const d=new Date(h.t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 // imha kaydına sebep, tarih ve tutanak fotoğrafı ekler (bir ya da birkaç kayıt için)
 function imhaDuzenle(ids,sonra){ const hs=ids.map(i=>V.hareketler.find(h=>h.id===i)).filter(Boolean); if(!hs.length) return; const h0=hs[0];
-  const u=V.urunler[h0.barkod]||{}; let sebep=imhaSebep(h0); const yeni=[], silinen=new Set(), yMeta={};
+  const u=V.urunler[h0.barkod]||{}; let sebep=h0.sebep||(imhaSebep(h0)===IMHA_SEBEPLER[0]?IMHA_SEBEPLER[0]:""); const yeni=[], silinen=new Set(), yMeta={};
   const mevcut=()=>{ const s=[]; hs.forEach(h=>(h.belgeIds||[]).forEach(id=>{ if(!s.some(x=>x.id===id)&&!silinen.has(id)) s.push({id,h}); })); return s; };
   const b=dlg("İmha sebebi ve tutanak",`<p class="small">${hs.length>1?"<b>"+hs.length+" imha kaydı</b> seçildi (aynı sebep ve tutanak hepsine eklenir)":"<b>"+esc(u.ad||h0.barkod)+"</b> · "+esc(KISA[h0.kres]||h0.kres)+" · "+nf(-h0.miktar,3)+" "+esc(u.birim||"")}</p>
     <label class="f">İmha tarihi<input id="imd_t" inputmode="numeric" value="${trTarih(imhaGunu(h0))}" style="font-size:16px"></label>

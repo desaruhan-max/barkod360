@@ -168,6 +168,7 @@ label.fotoCek small{font-weight:600;opacity:.8;font-size:12px}
 .rt.stt tr.alt td{border-top:1px dashed var(--line)}
 .kbtn.p{background:linear-gradient(135deg,#7a2f22,#b0533a)}
 .kbtn.a{background:linear-gradient(135deg,#8a5a14,#c98a2e)}
+.kbtn.r{background:linear-gradient(135deg,#8c2b2b,#c4493f)}
 .kbtn.o{background:linear-gradient(135deg,#123b34,#1f5a4c);box-shadow:0 6px 22px rgba(0,0,0,.12),inset 0 0 0 2px var(--gold)}
 .kbtn .ico{width:52px;height:52px;border-radius:14px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center}
 .kbtn .ico svg{width:30px;height:30px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -286,6 +287,7 @@ img[data-g],.dlg img{cursor:zoom-in}
     <button data-tab="sayim"><span class="i"><svg viewBox="0 0 24 24"><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z"/><path d="M8 6H6a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2"/><path d="M9 13l2 2 4-4"/></svg></span>STOK SAYIMI</button>
     <button data-tab="stok"><span class="i"><svg viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></span>STOK DURUMU</button>
     <button data-tab="skt"><span class="i"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg></span>STT / TETT TAKİBİ</button>
+    <button data-tab="imha"><span class="i"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg></span>İMHA KAYITLARI</button>
     <button data-tab="lot"><span class="i"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5"/></svg></span>LOT / GERİ ÇAĞIRMA</button>
     <div class="sep"></div>
     <button data-tab="urunler"><span class="i"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>Ürün Kartları</button>
@@ -326,6 +328,10 @@ img[data-g],.dlg img{cursor:zoom-in}
       <span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg></span>
       <span class="kt">STT / TETT TAKİBİ</span><span class="kd">Süresi geçen ve yaklaşan ürünler · imha ve öncelikli kullanım listesi</span>
       <span class="ks" id="kSktSt"></span></button>
+    <button class="kbtn r" data-go="imha"><span class="arr">→</span>
+      <span class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/></svg></span>
+      <span class="kt">İMHA KAYITLARI</span><span class="kd">İmha edilen ürünler · tarih, sebep ve imha tutanağı · geçmişe dönük liste</span>
+      <span class="ks" id="kImhaSt"></span></button>
   </div>
 </section>
 
@@ -499,6 +505,25 @@ img[data-g],.dlg img{cursor:zoom-in}
 
 <!-- ============ SKT ============ -->
 <!-- ============ SEVK ============ -->
+<section class="tab" id="tab-imha">
+  <div class="sec-h"><h2>İmha Kayıtları</h2>
+    <div class="sp"><button class="btn sm" id="imExcel">Excel'e aktar</button> <button class="btn sm" id="imYaz">Yazdır</button></div></div>
+  <div class="kpis" id="imKpi"></div>
+  <div class="card">
+    <div class="toolbar" style="flex-wrap:wrap;gap:8px">
+      <label class="f" style="margin:0">Başlangıç<input id="imBas" type="date"></label>
+      <label class="f" style="margin:0">Bitiş<input id="imBit" type="date"></label>
+      <select id="imKres" style="font-size:14px"></select>
+      <select id="imTut" style="font-size:14px"><option value="">Tutanak: hepsi</option><option value="yok">Tutanaksız</option><option value="var">Tutanaklı</option></select>
+      <input id="imAra" placeholder="Ürün / parti ara" style="font-size:14px;flex:1;min-width:140px">
+      <button class="btn sm" id="imTum">Tüm geçmiş</button>
+    </div>
+    <p class="hint">Stok Durumu ya da STT / TETT sayfasında <b>İmha</b>'ya basınca kayıt buraya düşer. Her kayda imha sebebi ve imha tutanağının fotoğrafı eklenir.</p>
+    <div id="imListe"></div>
+    <div style="margin-top:8px"><button class="btn sm" id="imTopluBtn">Seçililere sebep / tutanak ekle</button></div>
+  </div>
+</section>
+
 <section class="tab" id="tab-sevk">
   <div class="sec-h"><h2>Sevk (kreşler arası)</h2>
     <div class="sp"><button class="btn sm" id="svExcel">Excel'e aktar</button></div></div>
@@ -912,6 +937,7 @@ async function fotoYukle(){
     return deg; };
   let deg=false;
   for(const l of Object.values(V.lotlar)) if((l.fotoIds||[]).length && (await isle(l,"fotoIds"))) deg=true;
+  for(const h of V.hareketler) if((h.belgeIds||[]).length && (await isle(h,"belgeIds"))) deg=true;
   for(const x of (V.islemler||[])) if((x.fotoIds||[]).length && (await isle(x,"fotoIds"))) deg=true;
   for(const x of (V.kullanimlar||[])) if((x.belgeIds||[]).length && (await isle(x,"belgeIds"))) deg=true;
   for(const x of (V.menuler||[])) if((x.belgeIds||[]).length && (await isle(x,"belgeIds"))) deg=true;
@@ -1809,6 +1835,7 @@ SAYFA.konsol = { goster(){
   { const kr=aktifKres(); const isl=(V.islemler||[]).filter(x=>x.kres===kr); const e=$("#kIslSt"); if(e) e.textContent=SAYFA.islenmis.bekleyen().length+" ürün işlenmeyi bekliyor · "+isl.filter(x=>x.durum!=="islendi").length+" işlemde"; }
   $("#kCikisSt").textContent="Bugün "+hb.filter(h=>CIKIS_TURLERI.includes(h.tur)).length+" çıkış";
   $("#kSktSt").textContent=gecti?gecti+" parti imha bekliyor":(yak?yak+" parti bu hafta dolacak":"Sorun yok");
+  { const im=imhaHareketleri(); const e=$("#kImhaSt"); if(e) e.textContent=im.length?im.length+" imha kaydı · "+im.filter(h=>!(h.belgeIds||[]).length).length+" tutanaksız":"Henüz imha yok"; }
   let ban="";
   yarimSayimlar().forEach(ys=>{ ban+=`<div class="banner"><span>Yarım kalmış sayım: <b>${esc(ys.kres)}</b> (${Object.keys(ys.sayilan||{}).length} kalem).</span><button class="btn sm" data-sykres="${esc(ys.kres)}">Sayıma dön</button></div>`; });
   const sy=V.ayar.sonYedek; const gun=sy?Math.floor((Date.now()-new Date(sy))/864e5):null;
@@ -2894,12 +2921,12 @@ function stokCikisDlg(ids,tur,sonra){ const ls=fefoSirala(ids.map(i=>V.lotlar[i]
       const kc=$("#sc_b",b)?+$("#sc_b",b).value:1; m=yuvarla(m*kc);
       if(m>top && m-top<0.01) m=top; // ekranda yuvarlanmış görünen miktar yazılırsa tamamını çıkar
       if(!(m>0)||m>top+1e-9){ e.textContent="⚠ Miktar 0 ile "+nf(top,3)+" arasında olmalı"; e.style.display="block"; return false; }
-      const ack=$("#sc_a",b).value.trim(); const hedef=tr==="TRANSFER_CIKIS"?$("#sc_h",b).value:null; const grup=uid("g"); let kal=m;
+      const ack=$("#sc_a",b).value.trim(); const hedef=tr==="TRANSFER_CIKIS"?$("#sc_h",b).value:null; const grup=uid("g"); let kal=m; const imIds=[];
       for(const l of ls){ if(kal<=1e-9) break; const al=Math.min(kal,kalanOf(l.id)); kal=yuvarla(kal-al);
-        hareketEkle({tur:tr,kres,barkod:l.barkod,lotId:l.id,miktar:-al,fiyat:l.fiyat,ack:(hedef?"→ "+hedef+" ":"")+ack,hedef,grup});
+        { const hh=hareketEkle({tur:tr,kres,barkod:l.barkod,lotId:l.id,miktar:-al,fiyat:l.fiyat,ack:(hedef?"→ "+hedef+" ":"")+ack,hedef,grup}); if(tr==="IMHA") imIds.push(hh.id); }
         if(hedef){ let yl=Object.values(V.lotlar).find(x=>x.kaynakLotId===l.id&&x.kres===hedef); if(!yl){ yl=Object.assign({},l,{id:uid("l"),kres:hedef,kaynakLotId:l.id,girisTarihi:bugun(),not:"Transfer: "+kres}); V.lotlar[yl.id]=yl; }
           hareketEkle({tur:"TRANSFER_GIRIS",kres:hedef,barkod:l.barkod,lotId:yl.id,miktar:al,fiyat:l.fiyat,ack:"← "+kres+" "+ack,grup}); } }
-      kaydet(); bip(); toast(TURLER[tr].ad+": "+(u.ad||"")+" · "+nf(m)+" "+(u.birim||"")); sonra&&sonra(); }}]);
+      kaydet(); bip(); toast(TURLER[tr].ad+": "+(u.ad||"")+" · "+nf(m)+" "+(u.birim||"")); sonra&&sonra(); if(imIds.length) imhaSayfasinaGit(imIds); }}]);
   $$("#sc_t button",b).forEach(x=>x.onclick=()=>{ $$("#sc_t button",b).forEach(y=>y.classList.toggle("on",y===x)); $("#sc_hw",b).style.display=x.dataset.t==="TRANSFER_CIKIS"?"":"none"; });
   $("#sc_tam",b).onclick=()=>{ if($("#sc_b",b)) $("#sc_b",b).value="1"; $("#sc_m",b).value=String(top).replace(".",","); };
   setTimeout(()=>{ const i=$("#sc_m",b); i&&i.focus(); },50); }
@@ -3054,7 +3081,7 @@ function imhaDlg(id){
   const l=V.lotlar[id], u=V.urunler[l.barkod]; const k=kalanOf(id);
   dlg("İmha kaydı",`<p><b>${esc(u.ad)}</b> · Lot ${esc(l.lot||"—")} · ${l.sktTur||"STT"} ${trTarih(l.skt)}</p><label class="f">İmha edilen miktar (${esc(u.birim)})<input id="im_m" type="number" step="any" value="${k}"></label><label class="f">Açıklama / tutanak no<input id="im_a" value="Tarihi geçti"></label>`,
     [{t:"Vazgeç"},{t:"İmha olarak kaydet",c:"primary",f:()=>{ const m=+$("#im_m").value; if(!(m>0)||m>k+1e-9){ toast("Miktar 0 ile "+nf(k)+" arasında olmalı",1); return false; }
-      hareketEkle({tur:"IMHA",kres:l.kres,barkod:l.barkod,lotId:id,miktar:-m,fiyat:l.fiyat,ack:$("#im_a").value.trim()}); kaydet(); toast("İmha kaydedildi"); SAYFA.skt.goster(); }}]);
+      const hh=hareketEkle({tur:"IMHA",kres:l.kres,barkod:l.barkod,lotId:id,miktar:-m,fiyat:l.fiyat,ack:$("#im_a").value.trim()}); kaydet(); toast("İmha kaydedildi"); SAYFA.skt.goster(); imhaSayfasinaGit([hh.id]); }}]);
 }
 
 /* ================== LOT / GERİ ÇAĞIRMA ================== */
@@ -3761,6 +3788,65 @@ SAYFA.menu={ ilk:false,
     $$("[data-mnd]").forEach(b=>b.onclick=()=>this.duzelt(b.dataset.mnd));
     $$("[data-mnb]").forEach(b=>b.onclick=()=>{ const x=V.menuler.find(z=>(z.belgeIds||[]).includes(b.dataset.mnb)); if(x) belgeAc(x,b.dataset.mnb); });
     $$("[data-mns]").forEach(b=>b.onclick=async()=>{ if(!await onayla(trTarih(b.dataset.mns)+" menüsü silinsin mi?","Sil")) return; V.menuler=V.menuler.filter(x=>x.tarih!==b.dataset.mns); kaydet(); this.liste(); toast("Silindi"); }); }
+};
+
+/* ================== İMHA KAYITLARI ================== */
+const IMHA_SEBEPLER=["Tarihi geçti (STT/TETT)","Bozuk / küflenmiş / kokmuş","Ambalaj hasarlı","Soğuk zincir bozuldu","Geri çağırma / bloke","Kabul edilmedi / yanlış ürün","Diğer"];
+function imhaHareketleri(){ return V.hareketler.filter(h=>h.tur==="IMHA"&&!h.tersId); }
+function imhaGunu(h){ if(h.tarih) return h.tarih; const d=new Date(h.t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+// imha kaydına sebep, tarih ve tutanak fotoğrafı ekler (bir ya da birkaç kayıt için)
+function imhaDuzenle(ids,sonra){ const hs=ids.map(i=>V.hareketler.find(h=>h.id===i)).filter(Boolean); if(!hs.length) return; const h0=hs[0];
+  const u=V.urunler[h0.barkod]||{}; let sebep=h0.sebep||""; const yeni=[], silinen=new Set();
+  const mevcut=()=>{ const s=[]; hs.forEach(h=>(h.belgeIds||[]).forEach(id=>{ if(!s.some(x=>x.id===id)&&!silinen.has(id)) s.push({id,h}); })); return s; };
+  const b=dlg("İmha sebebi ve tutanak",`<p class="small">${hs.length>1?"<b>"+hs.length+" imha kaydı</b> seçildi (aynı sebep ve tutanak hepsine eklenir)":"<b>"+esc(u.ad||h0.barkod)+"</b> · "+esc(KISA[h0.kres]||h0.kres)+" · "+nf(-h0.miktar,3)+" "+esc(u.birim||"")}</p>
+    <label class="f">İmha tarihi<input id="imd_t" inputmode="numeric" value="${trTarih(imhaGunu(h0))}" style="font-size:16px"></label>
+    <div class="small muted">İmha sebebi</div><div class="chips" id="imd_s" style="flex-wrap:wrap">${IMHA_SEBEPLER.map(s=>`<button type="button" data-s="${esc(s)}" class="${s===sebep?"on":""}">${esc(s)}</button>`).join("")}</div>
+    <label class="f" style="margin-top:8px">Açıklama<input id="imd_a" value="${esc(h0.ack||"")}" placeholder="Örn. buzdolabı arızası, 2 paket küflü" style="font-size:16px"></label>
+    <label class="f">İmha tutanak no<input id="imd_n" value="${esc(h0.tutanakNo||"")}" style="font-size:16px"></label>
+    <div class="small muted" style="margin-top:6px">İmha tutanağı (fotoğraf)</div>
+    <div id="imd_g" style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0"></div>
+    <div class="inrow" style="gap:8px"><button type="button" class="btn" id="imd_cek">📸 Fotoğraf çek</button><button type="button" class="btn" id="imd_sec">🖼 Dosyadan seç</button></div>
+    <p id="imd_h" class="neg" style="display:none;font-weight:700"></p>`,
+    [{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const t=tarihCoz($("#imd_t",b).value); if(!t){ const e=$("#imd_h",b); e.textContent="⚠ Tarihi gg.aa.yyyy yazın"; e.style.display="block"; return false; }
+      for(const h of hs){ h.tarih=t; h.sebep=sebep||undefined; h.ack=$("#imd_a",b).value.trim(); h.tutanakNo=$("#imd_n",b).value.trim()||undefined;
+        h.belgeIds=(h.belgeIds||[]).filter(id=>!silinen.has(id)).concat(yeni.filter(id=>!(h.belgeIds||[]).includes(id))); if(!h.belgeIds.length) delete h.belgeIds; }
+      kaydet(); toast("İmha kaydı güncellendi"); sonra&&sonra(); }}],true);
+  tarihMaske($("#imd_t",b));
+  const ciz=async()=>{ const g=$("#imd_g",b); g.innerHTML=""; const liste=mevcut().map(x=>({id:x.id,ent:x.h})).concat(yeni.map(id=>({id,ent:null})));
+    for(const x of liste){ const w=document.createElement("div"); w.style.cssText="position:relative"; const im=document.createElement("img"); im.style.cssText="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1px solid #ccc"; im.dataset.buyut="1";
+      const x2=document.createElement("button"); x2.type="button"; x2.textContent="✕"; x2.style.cssText="position:absolute;top:-6px;right:-6px;border-radius:50%;width:24px;height:24px;border:0;background:#c4493f;color:#fff"; x2.onclick=()=>{ if(x.ent) silinen.add(x.id); else yeni.splice(yeni.indexOf(x.id),1); ciz(); };
+      w.appendChild(im); w.appendChild(x2); g.appendChild(w); fotoAl(x.id,x.ent).then(d=>{ if(d) im.src=d; }); }
+    if(!liste.length) g.innerHTML='<span class="small muted">Henüz tutanak fotoğrafı yok</span>'; };
+  const ekle=async kam=>{ const f=await gorselSec(kam); if(!f) return; try{ yeni.push(await gorselKaydet(f)); ciz(); }catch(e){ toast("Fotoğraf eklenemedi",1); } };
+  $("#imd_cek",b).onclick=()=>ekle(true); $("#imd_sec",b).onclick=()=>ekle(false);
+  $$("#imd_s button",b).forEach(x=>x.onclick=()=>{ sebep=sebep===x.dataset.s?"":x.dataset.s; $$("#imd_s button",b).forEach(y=>y.classList.toggle("on",y.dataset.s===sebep)); });
+  ciz(); }
+// imha kaydedilince İmha Kayıtları sayfasına geç ve sebep/tutanak penceresini aç
+function imhaSayfasinaGit(ids){ if(!ids||!ids.length) return; setTimeout(()=>{ sekme("imha"); setTimeout(()=>imhaDuzenle(ids,()=>SAYFA.imha.goster()),150); },200); }
+SAYFA.imha = {
+  ilk(){ selDoldur($("#imKres"),KRESLER.map(k=>[k,k]),"","Tüm kreşler");
+    ["imBas","imBit","imKres","imTut","imAra"].forEach(i=>$("#"+i).addEventListener("input",()=>this.goster()));
+    $("#imTum").onclick=()=>{ $("#imBas").value=""; $("#imBit").value=""; this.goster(); };
+    $("#imExcel").onclick=()=>this.excel(); $("#imYaz").onclick=()=>yazdir('<div class="rapor"><h2>İmha Kayıtları · '+esc($("#imKres").value||"Tüm kreşler")+" · "+trTarih(bugun())+"</h2>"+$("#imListe").innerHTML+"</div>");
+    $("#imTopluBtn").onclick=()=>{ const ids=$$("#imListe [data-ims]:checked").map(x=>x.dataset.ims); if(!ids.length){ toast("Önce listeden kayıt işaretleyin",1); return; } imhaDuzenle(ids,()=>this.goster()); }; },
+  veri(){ const b=$("#imBas").value||"0000", s=$("#imBit").value||"9999", kr=$("#imKres").value, tu=$("#imTut").value, t=katla($("#imAra").value);
+    return imhaHareketleri().filter(h=>{ const g=imhaGunu(h); return g>=b&&g<=s&&(!kr||h.kres===kr)&&(!tu||(tu==="yok")===!(h.belgeIds||[]).length)&&(!t||katla(urunAd(h.barkod)+" "+((V.lotlar[h.lotId]||{}).lot||"")+" "+(h.ack||"")+" "+(h.sebep||"")).includes(t)); })
+      .sort((a,c)=>imhaGunu(c).localeCompare(imhaGunu(a))||String(c.t).localeCompare(String(a.t))); },
+  goster(){ const r=this.veri(); this._r=r; const top=r.reduce((t,h)=>t+(-h.miktar)*(h.fiyat||0),0), yok=r.filter(h=>!(h.belgeIds||[]).length).length;
+    $("#imKpi").innerHTML=`<div class="kpi"><b>${r.length}</b><span>İmha kaydı</span></div><div class="kpi"><b>${tl(top).replace(" ₺","")}</b><span>İmha tutarı (₺)</span></div><div class="kpi ${yok?"warn":""}"><b>${yok}</b><span>Tutanağı olmayan</span></div>`;
+    $("#imListe").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th></th><th>Tarih</th><th>Kreş</th><th>Ürün</th><th>Parti / STT</th><th class="r">Miktar</th><th class="r">Tutar</th><th>Sebep</th><th>Tutanak</th><th></th></tr></thead><tbody>
+      ${r.map(h=>{ const l=V.lotlar[h.lotId]||{}, u=V.urunler[h.barkod]||{}; const bl=(h.belgeIds||[]);
+        return `<tr><td><input type="checkbox" data-ims="${esc(h.id)}"></td><td class="m">${trTarih(imhaGunu(h))}<div class="small muted">${esc(trTarihSaat(h.t).slice(11))}</div></td><td class="m">${esc(KISA[h.kres]||h.kres)}</td><td>${esc(urunAd(h.barkod))}</td><td>${esc(l.lot&&l.lot!=="SAYIM"?l.lot:"—")}<div class="small muted">${l.skt?(l.sktTur||"STT")+" "+trTarih(l.skt):""}</div></td><td class="r"><b>${nf(-h.miktar,3)}</b> ${esc(u.birim||"")}</td><td class="r">${h.fiyat!=null?tl(-h.miktar*h.fiyat):""}</td>
+        <td>${h.sebep?"<b>"+esc(h.sebep)+"</b>":'<span class="pill no">sebep yok</span>'}${h.ack?'<div class="small muted">'+esc(h.ack)+"</div>":""}</td>
+        <td>${bl.length?bl.map((id,i)=>`<button type="button" class="btn sm" data-imb="${esc(id)}" data-imh="${esc(h.id)}">📷 Tutanak${bl.length>1?" "+(i+1):""}</button>`).join(" "):'<span class="pill bad">tutanak yok</span>'}${h.tutanakNo?'<div class="small muted">No: '+esc(h.tutanakNo)+"</div>":""}</td>
+        <td class="act"><button class="btn sm primary" data-imd="${esc(h.id)}">✎ Sebep / Tutanak</button></td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bu aralıkta imha kaydı yok. Geçmişi görmek için "Tüm geçmiş"e basın.</div>';
+    $$("#imListe [data-imd]").forEach(x=>x.onclick=()=>imhaDuzenle([x.dataset.imd],()=>this.goster()));
+    $$("#imListe [data-imb]").forEach(x=>x.onclick=()=>{ const h=V.hareketler.find(z=>z.id===x.dataset.imh); if(h) belgeAc(h,x.dataset.imb); }); },
+  excel(){ const r=this._r||[]; if(!r.length){ toast("İmha kaydı yok",1); return; }
+    const H=["Tarih","Kreş","Ürün","Marka","Barkod","Parti","STT/TETT","Miktar","Birim","Tutar","Sebep","Açıklama","Tutanak no","Tutanak"];
+    const rows=[[{v:"İmha Kayıtları · "+($("#imKres").value||"Tüm kreşler")+" · "+trTarih(bugun()),s:XLSX_STIL.ust}],H.map(v=>({v,s:XLSX_STIL.baslik}))];
+    r.forEach(h=>{ const l=V.lotlar[h.lotId]||{}, u=V.urunler[h.barkod]||{}; rows.push([trTarih(imhaGunu(h)),h.kres,u.ad||h.barkod,u.marka||"",h.barkod,l.lot==="SAYIM"?"":(l.lot||""),l.skt?(l.sktTur||"STT")+" "+trTarih(l.skt):"",{v:yuvarla(-h.miktar),s:XLSX_STIL.sayi},u.birim||"",h.fiyat!=null?{v:yuvarla(-h.miktar*h.fiyat),s:XLSX_STIL.sayi}:"",h.sebep||"",h.ack||"",h.tutanakNo||"",(h.belgeIds||[]).length?"var":"yok"]); });
+    indir("imha kayitlari "+trTarih(bugun())+".xlsx",xlsxOlustur([{ad:"İmha",sutunlar:[11,20,32,16,16,14,18,9,8,10,26,30,14,9],satirlar:rows,donuk:2}])); toast("Excel dosyası indirildi (İndirilenler)"); }
 };
 
 </script>

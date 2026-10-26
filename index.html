@@ -2933,7 +2933,7 @@ function stokCikisDlg(ids,tur,sonra){ const ls=fefoSirala(ids.map(i=>V.lotlar[i]
       if(!(m>0)||m>top+1e-9){ e.textContent="⚠ Miktar 0 ile "+nf(top,3)+" arasında olmalı"; e.style.display="block"; return false; }
       const ack=$("#sc_a",b).value.trim(); const hedef=tr==="TRANSFER_CIKIS"?$("#sc_h",b).value:null; const grup=uid("g"); let kal=m; const imIds=[];
       for(const l of ls){ if(kal<=1e-9) break; const al=Math.min(kal,kalanOf(l.id)); kal=yuvarla(kal-al);
-        { const hh=hareketEkle({tur:tr,kres,barkod:l.barkod,lotId:l.id,miktar:-al,fiyat:l.fiyat,ack:(hedef?"→ "+hedef+" ":"")+ack,hedef,grup}); if(tr==="IMHA") imIds.push(hh.id); }
+        { const hh=hareketEkle({tur:tr,kres,barkod:l.barkod,lotId:l.id,miktar:-al,fiyat:l.fiyat,ack:(hedef?"→ "+hedef+" ":"")+ack,hedef,grup}); if(tr==="IMHA"){ imIds.push(hh.id); if(/tarih[iı] ge[cç]ti/i.test(ack)) hh.sebep=IMHA_SEBEPLER[0]; } }
         if(hedef){ let yl=Object.values(V.lotlar).find(x=>x.kaynakLotId===l.id&&x.kres===hedef); if(!yl){ yl=Object.assign({},l,{id:uid("l"),kres:hedef,kaynakLotId:l.id,girisTarihi:bugun(),not:"Transfer: "+kres}); V.lotlar[yl.id]=yl; }
           hareketEkle({tur:"TRANSFER_GIRIS",kres:hedef,barkod:l.barkod,lotId:yl.id,miktar:al,fiyat:l.fiyat,ack:"← "+kres+" "+ack,grup}); } }
       kaydet(); bip(); toast(TURLER[tr].ad+": "+(u.ad||"")+" · "+nf(m)+" "+(u.birim||"")); sonra&&sonra(); if(imIds.length) imhaSayfasinaGit(imIds); }}]);
@@ -3091,7 +3091,7 @@ function imhaDlg(id){
   const l=V.lotlar[id], u=V.urunler[l.barkod]; const k=kalanOf(id);
   dlg("İmha kaydı",`<p><b>${esc(u.ad)}</b> · Lot ${esc(l.lot||"—")} · ${l.sktTur||"STT"} ${trTarih(l.skt)}</p><label class="f">İmha edilen miktar (${esc(u.birim)})<input id="im_m" type="number" step="any" value="${k}"></label><label class="f">Açıklama / tutanak no<input id="im_a" value="Tarihi geçti"></label>`,
     [{t:"Vazgeç"},{t:"İmha olarak kaydet",c:"primary",f:()=>{ const m=+$("#im_m").value; if(!(m>0)||m>k+1e-9){ toast("Miktar 0 ile "+nf(k)+" arasında olmalı",1); return false; }
-      const hh=hareketEkle({tur:"IMHA",kres:l.kres,barkod:l.barkod,lotId:id,miktar:-m,fiyat:l.fiyat,ack:$("#im_a").value.trim()}); kaydet(); toast("İmha kaydedildi"); SAYFA.skt.goster(); imhaSayfasinaGit([hh.id]); }}]);
+      const hh=hareketEkle({tur:"IMHA",kres:l.kres,barkod:l.barkod,lotId:id,miktar:-m,fiyat:l.fiyat,ack:$("#im_a").value.trim(),sebep:IMHA_SEBEPLER[0]}); kaydet(); toast("İmha kaydedildi"); SAYFA.skt.goster(); imhaSayfasinaGit([hh.id]); }}]);
 }
 
 /* ================== LOT / GERİ ÇAĞIRMA ================== */
@@ -3802,11 +3802,12 @@ SAYFA.menu={ ilk:false,
 
 /* ================== İMHA KAYITLARI ================== */
 const IMHA_SEBEPLER=["Tarihi geçti (STT/TETT)","Bozuk / küflenmiş / kokmuş","Ambalaj hasarlı","Soğuk zincir bozuldu","Geri çağırma / bloke","Kabul edilmedi / yanlış ürün","Diğer"];
+function imhaSebep(h){ return h.sebep||(/tarih[iı]?\s*ge[cç]|ge[cç]ti|ge[cç]mi[sş]/i.test((h.ack||"").replace(/İ/g,"i"))?IMHA_SEBEPLER[0]:""); }
 function imhaHareketleri(){ return V.hareketler.filter(h=>h.tur==="IMHA"&&!h.tersId); }
 function imhaGunu(h){ if(h.tarih) return h.tarih; const d=new Date(h.t); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 // imha kaydına sebep, tarih ve tutanak fotoğrafı ekler (bir ya da birkaç kayıt için)
 function imhaDuzenle(ids,sonra){ const hs=ids.map(i=>V.hareketler.find(h=>h.id===i)).filter(Boolean); if(!hs.length) return; const h0=hs[0];
-  const u=V.urunler[h0.barkod]||{}; let sebep=h0.sebep||""; const yeni=[], silinen=new Set(), yMeta={};
+  const u=V.urunler[h0.barkod]||{}; let sebep=imhaSebep(h0); const yeni=[], silinen=new Set(), yMeta={};
   const mevcut=()=>{ const s=[]; hs.forEach(h=>(h.belgeIds||[]).forEach(id=>{ if(!s.some(x=>x.id===id)&&!silinen.has(id)) s.push({id,h}); })); return s; };
   const b=dlg("İmha sebebi ve tutanak",`<p class="small">${hs.length>1?"<b>"+hs.length+" imha kaydı</b> seçildi (aynı sebep ve tutanak hepsine eklenir)":"<b>"+esc(u.ad||h0.barkod)+"</b> · "+esc(KISA[h0.kres]||h0.kres)+" · "+nf(-h0.miktar,3)+" "+esc(u.birim||"")}</p>
     <label class="f">İmha tarihi<input id="imd_t" inputmode="numeric" value="${trTarih(imhaGunu(h0))}" style="font-size:16px"></label>
@@ -3845,14 +3846,14 @@ SAYFA.imha = {
     $("#imExcel").onclick=()=>this.excel(); $("#imYaz").onclick=()=>yazdir('<div class="rapor"><h2>İmha Kayıtları · '+esc($("#imKres").value||"Tüm kreşler")+" · "+trTarih(bugun())+"</h2>"+$("#imListe").innerHTML+"</div>");
     $("#imTopluBtn").onclick=()=>{ const ids=$$("#imListe [data-ims]:checked").map(x=>x.dataset.ims); if(!ids.length){ toast("Önce listeden kayıt işaretleyin",1); return; } imhaDuzenle(ids,()=>this.goster()); }; },
   veri(){ const b=$("#imBas").value||"0000", s=$("#imBit").value||"9999", kr=$("#imKres").value, tu=$("#imTut").value, t=katla($("#imAra").value);
-    return imhaHareketleri().filter(h=>{ const g=imhaGunu(h); return g>=b&&g<=s&&(!kr||h.kres===kr)&&(!tu||(tu==="yok")===!(h.belgeIds||[]).length)&&(!t||katla(urunAd(h.barkod)+" "+((V.lotlar[h.lotId]||{}).lot||"")+" "+(h.ack||"")+" "+(h.sebep||"")).includes(t)); })
+    return imhaHareketleri().filter(h=>{ const g=imhaGunu(h); return g>=b&&g<=s&&(!kr||h.kres===kr)&&(!tu||(tu==="yok")===!(h.belgeIds||[]).length)&&(!t||katla(urunAd(h.barkod)+" "+((V.lotlar[h.lotId]||{}).lot||"")+" "+(h.ack||"")+" "+imhaSebep(h)).includes(t)); })
       .sort((a,c)=>imhaGunu(c).localeCompare(imhaGunu(a))||String(c.t).localeCompare(String(a.t))); },
   goster(){ const r=this.veri(); this._r=r; const top=r.reduce((t,h)=>t+(-h.miktar)*(h.fiyat||0),0), yok=r.filter(h=>!(h.belgeIds||[]).length).length;
     $("#imKpi").innerHTML=`<div class="kpi"><b>${r.length}</b><span>İmha kaydı</span></div><div class="kpi"><b>${tl(top).replace(" ₺","")}</b><span>İmha tutarı (₺)</span></div><div class="kpi ${yok?"warn":""}"><b>${yok}</b><span>Tutanağı olmayan</span></div>`;
     $("#imListe").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th></th><th>Tarih</th><th>Kreş</th><th>Ürün</th><th>Parti / STT</th><th class="r">Miktar</th><th class="r">Tutar</th><th>Sebep</th><th>Tutanak</th><th></th></tr></thead><tbody>
       ${r.map(h=>{ const l=V.lotlar[h.lotId]||{}, u=V.urunler[h.barkod]||{}; const bl=(h.belgeIds||[]);
         return `<tr><td><input type="checkbox" data-ims="${esc(h.id)}"></td><td class="m">${trTarih(imhaGunu(h))}<div class="small muted">${esc(trTarihSaat(h.t).slice(11))}</div></td><td class="m">${esc(KISA[h.kres]||h.kres)}</td><td>${esc(urunAd(h.barkod))}</td><td>${esc(l.lot&&l.lot!=="SAYIM"?l.lot:"—")}<div class="small muted">${l.skt?(l.sktTur||"STT")+" "+trTarih(l.skt):""}</div></td><td class="r"><b>${nf(-h.miktar,3)}</b> ${esc(u.birim||"")}</td><td class="r">${h.fiyat!=null?tl(-h.miktar*h.fiyat):""}</td>
-        <td>${h.sebep?"<b>"+esc(h.sebep)+"</b>":'<span class="pill no">sebep yok</span>'}${h.ack?'<div class="small muted">'+esc(h.ack)+"</div>":""}</td>
+        <td>${imhaSebep(h)?"<b>"+esc(imhaSebep(h))+"</b>":'<span class="pill no">sebep yok</span>'}${h.ack&&h.ack!==imhaSebep(h)&&!/^tarihi geçti$/i.test(h.ack)?'<div class="small muted">'+esc(h.ack)+"</div>":""}</td>
         <td>${bl.length?bl.map((id,i)=>`<button type="button" class="btn sm" data-imb="${esc(id)}" data-imh="${esc(h.id)}">${(h.belgeMeta||{})[id]&&!/^image\//.test(h.belgeMeta[id].tip)?"📄":"📷"} Tutanak${bl.length>1?" "+(i+1):""}</button>`).join(" "):'<span class="pill bad">tutanak yok</span>'}${h.tutanakNo?'<div class="small muted">No: '+esc(h.tutanakNo)+"</div>":""}</td>
         <td class="act"><button class="btn sm primary" data-imd="${esc(h.id)}">✎ Sebep / Tutanak</button></td></tr>`; }).join("")}</tbody></table></div>`:'<div class="empty">Bu aralıkta imha kaydı yok. Geçmişi görmek için "Tüm geçmiş"e basın.</div>';
     $$("#imListe tbody tr").forEach(tr=>{ const id=(tr.querySelector("[data-imd]")||{dataset:{}}).dataset.imd; if(!id) return;
@@ -3864,7 +3865,7 @@ SAYFA.imha = {
   excel(){ const r=this._r||[]; if(!r.length){ toast("İmha kaydı yok",1); return; }
     const H=["Tarih","Kreş","Ürün","Marka","Barkod","Parti","STT/TETT","Miktar","Birim","Tutar","Sebep","Açıklama","Tutanak no","Tutanak"];
     const rows=[[{v:"İmha Kayıtları · "+($("#imKres").value||"Tüm kreşler")+" · "+trTarih(bugun()),s:XLSX_STIL.ust}],H.map(v=>({v,s:XLSX_STIL.baslik}))];
-    r.forEach(h=>{ const l=V.lotlar[h.lotId]||{}, u=V.urunler[h.barkod]||{}; rows.push([trTarih(imhaGunu(h)),h.kres,u.ad||h.barkod,u.marka||"",h.barkod,l.lot==="SAYIM"?"":(l.lot||""),l.skt?(l.sktTur||"STT")+" "+trTarih(l.skt):"",{v:yuvarla(-h.miktar),s:XLSX_STIL.sayi},u.birim||"",h.fiyat!=null?{v:yuvarla(-h.miktar*h.fiyat),s:XLSX_STIL.sayi}:"",h.sebep||"",h.ack||"",h.tutanakNo||"",(h.belgeIds||[]).length?"var":"yok"]); });
+    r.forEach(h=>{ const l=V.lotlar[h.lotId]||{}, u=V.urunler[h.barkod]||{}; rows.push([trTarih(imhaGunu(h)),h.kres,u.ad||h.barkod,u.marka||"",h.barkod,l.lot==="SAYIM"?"":(l.lot||""),l.skt?(l.sktTur||"STT")+" "+trTarih(l.skt):"",{v:yuvarla(-h.miktar),s:XLSX_STIL.sayi},u.birim||"",h.fiyat!=null?{v:yuvarla(-h.miktar*h.fiyat),s:XLSX_STIL.sayi}:"",imhaSebep(h),h.ack||"",h.tutanakNo||"",(h.belgeIds||[]).length?"var":"yok"]); });
     indir("imha kayitlari "+trTarih(bugun())+".xlsx",xlsxOlustur([{ad:"İmha",sutunlar:[11,20,32,16,16,14,18,9,8,10,26,30,14,9],satirlar:rows,donuk:2}])); toast("Excel dosyası indirildi (İndirilenler)"); }
 };
 

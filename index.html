@@ -1095,23 +1095,74 @@ async function belgeIndir(rec,id){ const d=await fotoAl(id,rec); if(!d){ toast("
 async function zipOku(buf){ const dv=new DataView(buf), u8=new Uint8Array(buf); let e=u8.length-22; while(e>=0&&dv.getUint32(e,true)!==0x06054b50) e--; if(e<0) throw new Error("zip değil");
   const n=dv.getUint16(e+10,true); let p=dv.getUint32(e+16,true); const out={}; const td=new TextDecoder();
   for(let i=0;i<n;i++){ const yon=dv.getUint16(p+10,true), csz=dv.getUint32(p+20,true), nl=dv.getUint16(p+28,true), el=dv.getUint16(p+30,true), cl=dv.getUint16(p+32,true), lo=dv.getUint32(p+42,true); const ad=td.decode(u8.subarray(p+46,p+46+nl)); p+=46+nl+el+cl;
-    if(!/^(word\/document\.xml|xl\/sharedStrings\.xml|xl\/workbook\.xml|xl\/worksheets\/sheet\d+\.xml)$/.test(ad)) continue;
+    if(!/^(word\/document\.xml|xl\/sharedStrings\.xml|xl\/workbook\.xml|xl\/styles\.xml|xl\/theme\/theme1\.xml|xl\/worksheets\/sheet\d+\.xml)$/.test(ad)) continue;
     const ln=dv.getUint16(lo+26,true), le=dv.getUint16(lo+28,true), v=u8.subarray(lo+30+ln+le,lo+30+ln+le+csz);
     out[ad]=yon===0?td.decode(v):td.decode(await new Response(new Blob([v]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).arrayBuffer()); }
   return out; }
 function xmlDoc(t){ return new DOMParser().parseFromString(t,"application/xml"); }
 function docxHtml(x){ const d=xmlDoc(x["word/document.xml"]||""); const W="http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-  const par=p=>{ let t=""; p.querySelectorAll("*").forEach(n=>{ if(n.namespaceURI!==W) return; if(n.localName==="t") t+=n.textContent; else if(n.localName==="tab") t+="\t"; else if(n.localName==="br") t+="\n"; }); const b=p.getElementsByTagNameNS(W,"b").length>0; return {t,b}; };
+  const ch=(e,n)=>[...e.children].find(k=>k.localName===n); const at=(e,n)=>e?e.getAttributeNS(W,n)||e.getAttribute("w:"+n):null; const on=e=>e&&at(e,"val")!=="0"&&at(e,"val")!=="false";
+  const runStil=rp=>{ if(!rp) return ""; const st=[]; if(on(ch(rp,"b"))) st.push("font-weight:700"); if(on(ch(rp,"i"))) st.push("font-style:italic"); if(ch(rp,"u")&&at(ch(rp,"u"),"val")!=="none") st.push("text-decoration:underline");
+    const c=at(ch(rp,"color"),"val"); if(c&&/^[0-9a-f]{6}$/i.test(c)) st.push("color:#"+c); const sz=at(ch(rp,"sz"),"val"); if(sz) st.push("font-size:"+(sz/2*1.33).toFixed(1)+"px");
+    const hl=at(ch(rp,"highlight"),"val"); if(hl&&hl!=="none") st.push("background:"+({yellow:"#ffff00",green:"#00ff00",cyan:"#00ffff",magenta:"#ff00ff",red:"#ff0000",blue:"#0000ff",lightGray:"#d3d3d3"}[hl]||hl)); const sh=ch(rp,"shd"); if(sh&&/^[0-9a-f]{6}$/i.test(at(sh,"fill")||"")) st.push("background:#"+at(sh,"fill")); return st.join(";"); };
+  const par=p=>{ const pp=ch(p,"pPr"); let h=""; const jc=pp&&at(ch(pp,"jc"),"val"); const al=jc==="center"?"center":jc==="right"||jc==="end"?"right":jc==="both"?"justify":"left"; const pst=[`text-align:${al}`,"margin:0 0 4px"]; const ps=pp&&ch(pp,"rPr"); const psh=pp&&ch(pp,"shd"); if(psh&&/^[0-9a-f]{6}$/i.test(at(psh,"fill")||"")) pst.push("background:#"+at(psh,"fill"));
+    const run=r=>{ let t=""; for(const k of r.children){ if(k.localName==="t") t+=esc(k.textContent); else if(k.localName==="tab") t+="&emsp;"; else if(k.localName==="br"||k.localName==="cr") t+="<br>"; } return t?`<span style="${runStil(ch(r,"rPr"))||runStil(ps)}">${t}</span>`:""; };
+    for(const k of p.children){ if(k.localName==="r") h+=run(k); else if(k.localName==="hyperlink") for(const r of k.children) if(r.localName==="r") h+=run(r); }
+    return `<div style="${pst.join(";")}">${h||"&nbsp;"}</div>`; };
+  const tablo=t=>{ const gr=ch(t,"tblGrid"); const gen=gr?[...gr.children].map(g=>Math.round(+at(g,"w")/15)):[]; let ci=0; const vm={};
+    return '<table style="border-collapse:collapse;margin:8px 0;table-layout:fixed;width:'+(gen.reduce((a,b)=>a+b,0)||"100%")+(gen.length?"px":"")+'"><colgroup>'+gen.map(w=>`<col style="width:${w}px">`).join("")+'</colgroup>'+[...t.children].filter(r=>r.localName==="tr").map(tr=>{ ci=0; return "<tr>"+[...tr.children].filter(k=>k.localName==="tc").map(tc=>{ const pr=ch(tc,"tcPr"); const gs=pr&&ch(pr,"gridSpan")?+at(ch(pr,"gridSpan"),"val"):1; const vme=pr&&ch(pr,"vMerge"); const start=ci; ci+=gs; if(vme&&at(vme,"val")!=="restart") return "";
+      const fill=pr&&ch(pr,"shd")&&at(ch(pr,"shd"),"fill"); const va=pr&&ch(pr,"vAlign")?at(ch(pr,"vAlign"),"val"):"top"; const stl=[`border:1px solid #888`,"padding:3px 6px",`vertical-align:${va==="center"?"middle":va==="bottom"?"bottom":"top"}`]; if(fill&&/^[0-9a-f]{6}$/i.test(fill)) stl.push("background:#"+fill);
+      return `<td${gs>1?` colspan="${gs}"`:""} style="${stl.join(";")}">${[...tc.children].map(q=>q.localName==="p"?par(q):q.localName==="tbl"?tablo(q):"").join("")}</td>`; }).join("")+"</tr>"; }).join("")+"</table>"; };
   const body=d.getElementsByTagNameNS(W,"body")[0]; let h="";
-  for(const c of body?body.children:[]){ if(c.localName==="p"){ const r=par(c); h+=r.t.trim()?`<p style="margin:0 0 8px;${r.b?"font-weight:700":""}">${esc(r.t).replace(/\n/g,"<br>")}</p>`:'<p style="margin:0 0 6px">&nbsp;</p>'; }
-    else if(c.localName==="tbl"){ h+='<table style="border-collapse:collapse;margin:8px 0;width:100%">'+[...c.children].filter(r=>r.localName==="tr").map(r=>"<tr>"+[...r.children].filter(k=>k.localName==="tc").map(k=>`<td style="border:1px solid #bbb;padding:4px 6px;vertical-align:top">${[...k.children].filter(q=>q.localName==="p").map(q=>esc(par(q).t)).join("<br>")}</td>`).join("")+"</tr>").join("")+"</table>"; } }
-  return h||"<p>Belgede metin bulunamadı.</p>"; }
-function xlsxHtml(x){ const S=[]; if(x["xl/sharedStrings.xml"]) xmlDoc(x["xl/sharedStrings.xml"]).querySelectorAll("si").forEach(si=>S.push([...si.querySelectorAll("t")].map(t=>t.textContent).join("")));
+  for(const c of body?body.children:[]){ if(c.localName==="p") h+=par(c); else if(c.localName==="tbl") h+=tablo(c); }
+  return `<div style="font-family:Calibri,Arial,sans-serif;font-size:15px;max-width:1000px;margin:0 auto">${h||"<p>Belgede metin bulunamadı.</p>"}</div>`; }
+const XL_GUN=["Pazar","Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi"], XL_AY=["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+const XL_YER={14:"dd.mm.yyyy",15:"d-mmm-yy",16:"d-mmm",17:"mmm-yy",18:"h:mm AM/PM",19:"h:mm:ss AM/PM",20:"hh:mm",21:"hh:mm:ss",22:"dd.mm.yyyy hh:mm",45:"mm:ss",46:"[h]:mm:ss",47:"mm:ss.0"};
+const XL_IDX=["000000","FFFFFF","FF0000","00FF00","0000FF","FFFF00","FF00FF","00FFFF","000000","FFFFFF","FF0000","00FF00","0000FF","FFFF00","FF00FF","00FFFF","800000","008000","000080","808000","800080","008080","C0C0C0","808080","9999FF","993366","FFFFCC","CCFFFF","660066","FF8080","0066CC","CCCCFF","000080","FF00FF","FFFF00","00FFFF","800080","800000","008080","0000FF","00CCFF","CCFFFF","CCFFCC","FFFF99","99CCFF","FF99CC","CC99FF","FFCC99","3366FF","33CCCC","99CC00","FFCC00","FF9900","FF6600","666699","969696","003366","339966","003300","333300","993300","993366","333399","333333"];
+function xlTarih(v,f){ const d=new Date(Date.UTC(1899,11,30)+Math.round(v*86400000)); const y=d.getUTCFullYear(),mo=d.getUTCMonth(),g=d.getUTCDate(),hh=d.getUTCHours(),mi=d.getUTCMinutes(),ss=d.getUTCSeconds(),wd=d.getUTCDay(); const p=n=>String(n).padStart(2,"0");
+  f=f.replace(/\[[^\]]*\]/g,"").replace(/"([^"]*)"/g,"$1").replace(/\\(.)/g,"$1"); let out="",i=0,sonSaat=false;
+  while(i<f.length){ const r=f.slice(i); let m;
+    if(m=r.match(/^yyyy|^yy/i)){ out+=m[0].length===4?y:p(y%100); i+=m[0].length; }
+    else if(m=r.match(/^m{1,5}/i)){ const n=m[0].length; if(sonSaat||/^m{1,2}[:.]s/i.test(r)){ out+=n===1?mi:p(mi); } else out+=n===1?mo+1:n===2?p(mo+1):n===3?XL_AY[mo].slice(0,3):XL_AY[mo]; i+=n; sonSaat=false; }
+    else if(m=r.match(/^d{1,4}/i)){ const n=m[0].length; out+=n===1?g:n===2?p(g):n===3?XL_GUN[wd].slice(0,3):XL_GUN[wd]; i+=n; }
+    else if(m=r.match(/^h{1,2}/i)){ const ap=/AM\/PM|A\/P/i.test(f); const h=ap?((hh%12)||12):hh; out+=m[0].length===1?h:p(h); i+=m[0].length; sonSaat=true; }
+    else if(m=r.match(/^s{1,2}/i)){ out+=m[0].length===1?ss:p(ss); i+=m[0].length; sonSaat=false; }
+    else if(m=r.match(/^AM\/PM|^A\/P/i)){ out+=hh<12?"AM":"PM"; i+=m[0].length; }
+    else { out+=f[i]; i++; } }
+  return out; }
+function xlsxHtml(x){ const S=[]; if(x["xl/sharedStrings.xml"]) xmlDoc(x["xl/sharedStrings.xml"]).querySelectorAll("sst > si").forEach(si=>S.push([...si.querySelectorAll("t")].filter(t=>!t.closest("rPh")).map(t=>t.textContent).join("")));
   const kol=r=>{ let n=0; for(const ch of r.replace(/\d/g,"")) n=n*26+ch.charCodeAt(0)-64; return n-1; };
+  // tema renkleri
+  const tema=[]; if(x["xl/theme/theme1.xml"]){ const td=xmlDoc(x["xl/theme/theme1.xml"]); const cs=td.getElementsByTagNameNS("*","clrScheme")[0]; if(cs) for(const c of cs.children){ const k=c.firstElementChild; tema.push((k&&(k.getAttribute("val")==="windowText"?"000000":k.getAttribute("val")==="window"?"FFFFFF":k.getAttribute("val")||k.getAttribute("lastClr")))||"000000"); } }
+  const tm=i=>{ const sira=[1,0,3,2,4,5,6,7,8,9]; return tema[sira[i]!=null?sira[i]:i]||"000000"; };
+  const renk=c=>{ if(!c) return null; let h=null; const rg=c.getAttribute("rgb"), th=c.getAttribute("theme"), ix=c.getAttribute("indexed"); if(rg) h=rg.slice(-6); else if(th!=null) h=tm(+th); else if(ix!=null) h=XL_IDX[+ix]; if(!h||!/^[0-9a-f]{6}$/i.test(h)) return null;
+    const t=parseFloat(c.getAttribute("tint")||"0"); if(t){ const v=[0,2,4].map(i=>parseInt(h.substr(i,2),16)).map(n=>Math.round(t>0?n*(1-t)+255*t:n*(1+t))); h=v.map(n=>n.toString(16).padStart(2,"0")).join(""); } return "#"+h; };
+  const nf={}, fonts=[], fills=[], borders=[], xfs=[]; 
+  if(x["xl/styles.xml"]){ const sd=xmlDoc(x["xl/styles.xml"]); sd.querySelectorAll("numFmts > numFmt").forEach(n=>nf[n.getAttribute("numFmtId")]=n.getAttribute("formatCode"));
+    sd.querySelectorAll("fonts > font").forEach(f=>{ const g=n=>f.getElementsByTagNameNS("*",n)[0]; fonts.push({b:!!g("b"),i:!!g("i"),u:!!g("u"),sz:g("sz")?g("sz").getAttribute("val"):null,c:renk(g("color")),ad:g("name")?g("name").getAttribute("val"):null}); });
+    sd.querySelectorAll("fills > fill").forEach(f=>{ const p=f.getElementsByTagNameNS("*","patternFill")[0]; fills.push(p&&p.getAttribute("patternType")==="solid"?renk(p.getElementsByTagNameNS("*","fgColor")[0]):null); });
+    sd.querySelectorAll("borders > border").forEach(b=>{ const o={}; for(const k of ["left","right","top","bottom"]){ const e=b.getElementsByTagNameNS("*",k)[0]; const st=e&&e.getAttribute("style"); if(st){ const c=e.getElementsByTagNameNS("*","color")[0]; o[k]=(/medium|thick/.test(st)?"2px":"1px")+" "+(/dash|dot/.test(st)?"dashed":"solid")+" "+(renk(c)||"#000"); } } borders.push(o); });
+    sd.querySelectorAll("cellXfs > xf").forEach(e=>{ const al=e.getElementsByTagNameNS("*","alignment")[0]; xfs.push({nf:e.getAttribute("numFmtId"),f:+(e.getAttribute("fontId")||0),fl:+(e.getAttribute("fillId")||0),b:+(e.getAttribute("borderId")||0),h:al&&al.getAttribute("horizontal"),v:al&&al.getAttribute("vertical"),w:al&&al.getAttribute("wrapText")==="1"}); }); }
+  const bicim=(xf,val,tip)=>{ if(val===""||val==null) return ""; const id=xf?xf.nf:"0"; const fk=nf[id]||XL_YER[id]||null; const sayi=parseFloat(val);
+    if(tip==="s"||tip==="str"||tip==="inlineStr"||isNaN(sayi)||tip==="b"||tip==="e") return tip==="b"?(val==="1"?"DOĞRU":"YANLIŞ"):val;
+    if(fk&&/[dmyh]/i.test(fk.replace(/\[[^\]]*\]|"[^"]*"|\\./g,""))&&!/^(General|0|#)/i.test(fk)) return xlTarih(sayi,fk);
+    if(fk&&/%/.test(fk)){ const o=(fk.match(/0\.(0+)/)||[])[1]||""; return (sayi*100).toFixed(o.length).replace(".",",")+"%"; }
+    if(fk&&/0\.0+/.test(fk)){ const o=fk.match(/0\.(0+)/)[1].length; return sayi.toFixed(o).replace(".",","); }
+    return String(+sayi.toPrecision(12)).replace(".",","); };
   const adlar=[]; if(x["xl/workbook.xml"]) xmlDoc(x["xl/workbook.xml"]).querySelectorAll("sheet").forEach(s=>adlar.push(s.getAttribute("name")));
   const sh=Object.keys(x).filter(k=>/worksheets\/sheet\d+\.xml$/.test(k)).sort((a,b)=>parseInt(a.match(/(\d+)\.xml/)[1])-parseInt(b.match(/(\d+)\.xml/)[1]));
-  return sh.map((k,si)=>{ const rows=[...xmlDoc(x[k]).querySelectorAll("sheetData > row")].slice(0,600); let mk=0; const g=rows.map(r=>{ const c=[]; r.querySelectorAll("c").forEach(cc=>{ const i=kol(cc.getAttribute("r")||"A1"); const t=cc.getAttribute("t"); const v=cc.querySelector("v"); let val=v?v.textContent:""; if(t==="s") val=S[+val]||""; else if(t==="inlineStr") val=[...cc.querySelectorAll("t")].map(q=>q.textContent).join(""); c[i]=val; mk=Math.max(mk,i+1); }); return c; });
-    return `<h3 style="margin:14px 0 6px">${esc(adlar[si]||"Sayfa "+(si+1))}</h3><div style="overflow:auto"><table style="border-collapse:collapse;font-size:13px">${g.map(c=>"<tr>"+Array.from({length:mk},(_,i)=>`<td style="border:1px solid #ccc;padding:3px 6px;white-space:pre-wrap;vertical-align:top">${esc(c[i]==null?"":c[i])}</td>`).join("")+"</tr>").join("")}</table></div>`; }).join("")||"<p>Sayfa bulunamadı.</p>"; }
+  return sh.map((k,si)=>{ const sd=xmlDoc(x[k]); const rows=[...sd.querySelectorAll("sheetData > row")].slice(0,800); const hucre={}; let mk=0, mr=0;
+    rows.forEach(r=>{ const ri=+r.getAttribute("r")-1; mr=Math.max(mr,ri+1); r.querySelectorAll("c").forEach(cc=>{ const ci=kol(cc.getAttribute("r")||"A1"); mk=Math.max(mk,ci+1); const t=cc.getAttribute("t"), v=cc.querySelector("v"); let val=v?v.textContent:""; if(t==="s") val=S[+val]||""; else if(t==="inlineStr") val=[...cc.querySelectorAll("t")].map(q=>q.textContent).join(""); hucre[ri+","+ci]={val,t,s:+(cc.getAttribute("s")||0)}; }); });
+    const birl={}, kapli={}; sd.querySelectorAll("mergeCells > mergeCell").forEach(m=>{ const [a1,b1]=m.getAttribute("ref").split(":"); if(!b1) return; const c1=kol(a1),r1=+a1.replace(/\D/g,"")-1,c2=kol(b1),r2=+b1.replace(/\D/g,"")-1; birl[r1+","+c1]=[r2-r1+1,c2-c1+1]; mk=Math.max(mk,c2+1); mr=Math.max(mr,r2+1); for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++) if(r!==r1||c!==c1) kapli[r+","+c]=1; });
+    const gen=[]; sd.querySelectorAll("cols > col").forEach(c=>{ for(let i=+c.getAttribute("min")-1;i<Math.min(+c.getAttribute("max"),200);i++) gen[i]=+c.getAttribute("width")*7+5; });
+    const yk={}; rows.forEach(r=>{ if(r.getAttribute("ht")) yk[+r.getAttribute("r")-1]=+r.getAttribute("ht")*1.34; });
+    let h=""; for(let r=0;r<mr;r++){ h+=`<tr style="${yk[r]?"height:"+yk[r]+"px":""}">`; for(let c=0;c<mk;c++){ const key=r+","+c; if(kapli[key]) continue; const hc=hucre[key]||{val:"",s:0}; const xf=xfs[hc.s]||null; const f=xf?fonts[xf.f]||{}:{}; const fl=xf?fills[xf.fl]:null; const bd=xf?borders[xf.b]||{}:{};
+        const stl=[]; if(fl) stl.push("background:"+fl); if(f.c) stl.push("color:"+f.c); if(f.b) stl.push("font-weight:700"); if(f.i) stl.push("font-style:italic"); if(f.u) stl.push("text-decoration:underline"); if(f.sz) stl.push("font-size:"+Math.round(f.sz*1.33)+"px");
+        for(const q of ["left","right","top","bottom"]) if(bd[q]) stl.push("border-"+q+":"+bd[q]);
+        const ha=(xf&&xf.h)||(hc.t==="s"||hc.t==="str"||hc.t==="inlineStr"?"left":(hc.val!==""&&!isNaN(parseFloat(hc.val))?"right":"left")); stl.push("text-align:"+(ha==="centerContinuous"?"center":ha==="general"?"left":ha)); stl.push("vertical-align:"+((xf&&xf.v)==="center"?"middle":(xf&&xf.v)==="top"?"top":"bottom")); if(xf&&xf.w) stl.push("white-space:pre-wrap"); else stl.push("white-space:nowrap");
+        const bl=birl[key]; h+=`<td${bl?` rowspan="${bl[0]}" colspan="${bl[1]}"`:""} style="${stl.join(";")};padding:2px 5px;overflow:hidden">${esc(bicim(xf,hc.val,hc.t)).replace(/\n/g,"<br>")}</td>`; } h+="</tr>"; }
+    const cg="<colgroup>"+Array.from({length:mk},(_,i)=>`<col style="width:${Math.round(gen[i]||64)}px">`).join("")+"</colgroup>";
+    return `<h3 style="margin:14px 0 6px">${esc(adlar[si]||"Sayfa "+(si+1))}</h3><div style="overflow:auto"><table style="border-collapse:collapse;table-layout:fixed;font-family:Calibri,Arial,sans-serif;font-size:14.5px;background:#fff">${cg}${h}</table></div>`; }).join("")||"<p>Sayfa bulunamadı.</p>"; }
 async function belgeAc(rec,id){ const d=await fotoAl(id,rec); if(!d){ toast("Belge açılamadı (internet gerekli olabilir)",1); return; }
   const mt=(rec.belgeMeta||{})[id]; if(!mt||/^image\//.test(mt.tip||"")){ resimBuyut(d); return; }
   const bl=await (await fetch(d)).blob(); const uz=(mt.uz||"").toLowerCase();

@@ -1167,15 +1167,23 @@ async function belgeAc(rec,id){ const d=await fotoAl(id,rec); if(!d){ toast("Bel
   const mt=(rec.belgeMeta||{})[id]; if(!mt||/^image\//.test(mt.tip||"")){ resimBuyut(d); return; }
   const bl=await (await fetch(d)).blob(); const uz=(mt.uz||"").toLowerCase();
   let ov=document.getElementById("belgeOnizle"); if(ov) ov.remove(); ov=document.createElement("div"); ov.id="belgeOnizle"; ov.style.cssText="position:fixed;inset:0;z-index:300;background:rgba(10,30,24,.78);display:flex;align-items:center;justify-content:center;padding:2vh 2vw";
-  ov.innerHTML=`<div style="background:#fff;border-radius:14px;width:min(1100px,96vw);height:94vh;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #e3e9e6"><b style="flex:1;word-break:break-all">${esc(mt.ad||"Belge")}</b><button class="btn sm" id="bo_i">⬇ İndir</button><button class="btn sm primary" id="bo_k">✕ Kapat</button></div><div id="bo_g" style="flex:1;overflow:auto;padding:14px"></div></div>`;
+  ov.innerHTML=`<div id="bo_k2" style="background:#fff;border-radius:14px;width:98vw;height:96vh;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;gap:6px;align-items:center;padding:10px 14px;border-bottom:1px solid #e3e9e6;flex-wrap:wrap"><b style="flex:1;word-break:break-all;min-width:140px">${esc(mt.ad||"Belge")}</b><button class="btn sm" id="bo_e" title="Küçült">－</button><b id="bo_y" style="min-width:48px;text-align:center">100%</b><button class="btn sm" id="bo_b" title="Büyüt">＋</button><button class="btn sm" id="bo_s" title="Sığdır">↔ Sığdır</button><button class="btn sm" id="bo_t" title="Tam ekran">⛶ Tam ekran</button><button class="btn sm" id="bo_i">⬇ İndir</button><button class="btn sm primary" id="bo_k">✕ Kapat</button></div><div id="bo_g" style="flex:1;overflow:auto;padding:14px"></div></div>`;
   document.body.appendChild(ov); const kapat=()=>{ ov.remove(); document.removeEventListener("keydown",esc_); }; const esc_=e=>{ if(e.key==="Escape") kapat(); }; document.addEventListener("keydown",esc_);
   ov.querySelector("#bo_k").onclick=kapat; ov.addEventListener("click",e=>{ if(e.target===ov) kapat(); }); ov.querySelector("#bo_i").onclick=()=>belgeIndir(rec,id);
   const g=ov.querySelector("#bo_g");
+  let zm=1; const ayar=v=>{ zm=Math.max(.3,Math.min(4,v)); g.firstElementChild&&pdfDegil&&(g.firstElementChild.style.zoom=zm); ov.querySelector("#bo_y").textContent=Math.round(zm*100)+"%"; };
+  const pdfDegil=!(mt.tip==="application/pdf"||uz==="pdf");
+  ov.querySelector("#bo_b").onclick=()=>ayar(zm+.15); ov.querySelector("#bo_e").onclick=()=>ayar(zm-.15);
+  ov.querySelector("#bo_s").onclick=()=>{ const c=g.firstElementChild; if(!c||!pdfDegil) return; c.style.zoom=1; const w=c.scrollWidth||1; ayar((g.clientWidth-30)/w); };
+  let tam=false; ov.querySelector("#bo_t").onclick=()=>{ tam=!tam; const k=ov.querySelector("#bo_k2"); k.style.width=tam?"100vw":"98vw"; k.style.height=tam?"100vh":"96vh"; k.style.borderRadius=tam?"0":"14px"; ov.style.padding=tam?"0":"2vh 2vw"; ov.querySelector("#bo_t").textContent=tam?"⮌ Küçült":"⛶ Tam ekran"; };
+  g.addEventListener("wheel",e=>{ if((e.ctrlKey||e.metaKey)&&pdfDegil){ e.preventDefault(); ayar(zm+(e.deltaY<0?.1:-.1)); } },{passive:false});
   try{ if(mt.tip==="application/pdf"||uz==="pdf"){ const u=URL.createObjectURL(new Blob([bl],{type:"application/pdf"})); g.style.padding="0"; g.innerHTML=`<iframe src="${u}" style="width:100%;height:100%;border:0"></iframe>`; }
     else if(uz==="docx"){ g.innerHTML=docxHtml(await zipOku(await bl.arrayBuffer())); }
     else if(uz==="xlsx"||uz==="xlsm"){ g.innerHTML=xlsxHtml(await zipOku(await bl.arrayBuffer())); }
     else g.innerHTML='<p>Bu dosya türü ekranda gösterilemiyor. Sağ üstteki <b>İndir</b> düğmesini kullanın.</p>'; }
-  catch(er){ g.innerHTML='<p>Dosya ekranda gösterilemedi ('+esc(er&&er.message||er)+'). Sağ üstteki <b>İndir</b> düğmesini kullanın.</p>'; } }
+  catch(er){ g.innerHTML='<p>Dosya ekranda gösterilemedi ('+esc(er&&er.message||er)+'). Sağ üstteki <b>İndir</b> düğmesini kullanın.</p>'; }
+  if(pdfDegil) g.innerHTML='<div style="width:max-content;min-width:100%">'+g.innerHTML+'</div>';
+  if(pdfDegil&&g.firstElementChild&&g.firstElementChild.scrollWidth>g.clientWidth+4) ov.querySelector("#bo_s").click(); }
 // resim dışı belge (PDF, Word): dosya olduğu gibi saklanır; {id, ad, tip, uz} döner
 async function belgeDosyaKaydet(f){ if(/^image\//.test(f.type)) return {id:await gorselKaydet(f)};
   if(f.size>15*1024*1024) throw new Error("Dosya 15 MB'tan büyük");

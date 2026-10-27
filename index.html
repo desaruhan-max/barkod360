@@ -463,6 +463,7 @@ img[data-g],.dlg img{cursor:zoom-in}
     <div id="mn_dur" class="small" style="margin:6px 0"></div>
     <div id="mn_onizle"></div>
   </div>
+  <div class="card"><h3 style="margin:0 0 4px">📂 Menü dosyaları <span class="small muted">(seçili ay)</span></h3><div id="mn_dosya"></div></div>
   <div class="card"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0">Kayıtlı menü</h3><span style="flex:1"></span><button class="btn sm" id="mn_geri">◀</button><b id="mn_ay"></b><button class="btn sm" id="mn_ileri">▶</button></div><div id="mn_liste" style="margin-top:8px"></div></div>
 </section>
 
@@ -3754,10 +3755,9 @@ SAYFA.menu={ ilk:false,
       $("#mn_ileri").onclick=()=>{ const d=new Date(MN.ay+"-01T12:00:00"); d.setMonth(d.getMonth()+1); MN.ay=d.toLocaleDateString("sv").slice(0,7); this.liste(); };
       const zn=$("#mn_zone"); const dosyalar=async fl=>{ toast("Dosya alınıyor: "+fl.map(x=>x.name).join(", ")); for(const f of fl){ const ad=f.name||"menu"; const img=/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic)$/i.test(ad);
           if(img){ await this.dosya(f.type?f:new File([f],ad,{type:"image/jpeg"})); continue; }
-          try{ const r=await belgeDosyaKaydet(f); const ay=MN.ay; const gl=V.menuler.filter(x=>(x.tarih||"").slice(0,7)===ay);
-            const ekle=m=>{ (m.belgeIds=m.belgeIds||[]).push(r.id); m.belgeMeta=Object.assign({},m.belgeMeta||{}); m.belgeMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; };
-            if(gl.length){ gl.forEach(ekle); kaydet(); this.liste(); toast("“"+ad+"” "+gl.length+" günün menüsüne eklendi"); }
-            else { MN.dosyalar=(MN.dosyalar||[]); MN.dosyalar.push(r); $("#mn_dur").innerHTML="📄 “"+esc(ad)+"” alındı. Günleri “+ Gün ekle” ile girip kaydedince bu dosya menüye bağlanır."; }
+          try{ const r=await belgeDosyaKaydet(f); const ay=MN.ay; let m=V.menuler.find(x=>x.id==="mnf"+ay.replace("-",""));
+            if(!m){ m={id:"mnf"+ay.replace("-",""),tarih:ay+"-00",dosyaOnly:true,sabah:"",ogle:"",ikindi:"",belgeIds:[],belgeMeta:{},kayit:new Date().toISOString()}; V.menuler.push(m); }
+            m.belgeIds.push(r.id); m.belgeMeta=Object.assign({},m.belgeMeta); m.belgeMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; kaydet(); this.liste(); toast("“"+ad+"” menü dosyalarına eklendi");
           }catch(er){ toast("Dosya eklenemedi: "+(er&&er.message||er),1); } } };
       if(zn){ ["dragenter","dragover"].forEach(o=>zn.addEventListener(o,e=>{ e.preventDefault(); e.stopPropagation(); zn.style.background="#DDEFE6"; })); ["dragleave","drop"].forEach(o=>zn.addEventListener(o,e=>{ e.preventDefault(); zn.style.background="#F3F8F5"; }));
         zn.addEventListener("drop",e=>{ e.stopPropagation(); const fl=[...(e.dataTransfer&&e.dataTransfer.files||[])]; if(fl.length) dosyalar(fl); });
@@ -3796,9 +3796,7 @@ SAYFA.menu={ ilk:false,
     $$("[data-mx]",k).forEach(e=>e.onclick=()=>{ MN.onizle.splice(+e.dataset.mx,1); this.onizleCiz(); });
     $("#mn_vaz",k).onclick=()=>{ MN.onizle=[]; MN.belge=null; $("#mn_dur").textContent=""; this.onizleCiz(); };
     $("#mn_kay",k).onclick=()=>{ for(const g of MN.onizle){ const id="mn"+g.tarih.replace(/-/g,""); const eski=menuGun(g.tarih); V.menuler=V.menuler.filter(x=>x.tarih!==g.tarih);
-        { const kyd={id,tarih:g.tarih,sabah:g.sabah,ogle:g.ogle,ikindi:g.ikindi,belgeIds:MN.belge?[MN.belge]:((eski&&eski.belgeIds)||[]),kayit:new Date().toISOString()}; if(eski&&eski.belgeMeta) kyd.belgeMeta=Object.assign({},eski.belgeMeta);
-          for(const r of (MN.dosyalar||[])){ kyd.belgeIds.push(r.id); kyd.belgeMeta=Object.assign({},kyd.belgeMeta||{}); kyd.belgeMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; } V.menuler.push(kyd); } }
-      MN.dosyalar=[];
+        { const kyd={id,tarih:g.tarih,sabah:g.sabah,ogle:g.ogle,ikindi:g.ikindi,belgeIds:MN.belge?[MN.belge]:((eski&&eski.belgeIds)||[]),kayit:new Date().toISOString()}; if(eski&&eski.belgeMeta) kyd.belgeMeta=Object.assign({},eski.belgeMeta); V.menuler.push(kyd); } }
       const n=MN.onizle.length; MN.ay=MN.onizle[0].tarih.slice(0,7); MN.onizle=[]; MN.belge=null; $("#mn_dur").textContent=""; kaydet(); this.onizleCiz(); this.liste(); toast(n+" günün menüsü kaydedildi"); }; },
   duzelt(t){ const m=t?menuGun(t):null; const b=dlg(m?"Menüyü düzelt · "+trTarih(t):"+ Gün ekle",`<label class="f">Tarih<input id="mdT" inputmode="numeric" value="${m?trTarih(m.tarih):trTarih(bugun())}" style="font-size:16px"></label>
       <label class="f">Sabah öğünü<textarea id="mdS" rows="2">${esc(m?m.sabah:"")}</textarea></label><label class="f">Öğle öğünü<textarea id="mdO" rows="3">${esc(m?m.ogle:"")}</textarea></label><label class="f">İkindi öğünü<textarea id="mdI" rows="2">${esc(m?m.ikindi:"")}</textarea></label>`,
@@ -3808,7 +3806,9 @@ SAYFA.menu={ ilk:false,
         V.menuler.push(Object.assign({id:"mn"+yt.replace(/-/g,""),tarih:yt,belgeIds:bel,kayit:new Date().toISOString()},v)); MN.ay=yt.slice(0,7); kaydet(); this.liste(); toast("Menü kaydedildi"); }}]);
     tarihMaske($("#mdT",b)); },
   liste(){ $("#mn_ay").textContent=new Date(MN.ay+"-01T12:00:00").toLocaleDateString("tr-TR",{month:"long",year:"numeric"});
-    const r=(V.menuler||[]).filter(x=>x.tarih.startsWith(MN.ay)).sort((a,b)=>a.tarih.localeCompare(b.tarih));
+    const mf=(V.menuler||[]).find(x=>x.dosyaOnly&&x.tarih.startsWith(MN.ay)); const dk=$("#mn_dosya"); if(dk){ const bl=(mf&&mf.belgeIds)||[]; dk.innerHTML=bl.length?bl.map(id=>{ const mt=(mf.belgeMeta||{})[id]||{}; const im=/^image\//.test(mt.tip||""); return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:20px">${im?"🖼":"📄"}</span><b style="flex:1;word-break:break-all">${esc(mt.ad||"Menü dosyası")}</b><button class="btn sm primary" data-mfa="${esc(id)}">Aç</button><button class="btn sm danger" data-mfs="${esc(id)}">Sil</button></div>`; }).join(""):'<div class="small muted">Bu ay için yüklenmiş menü dosyası yok. Yukarıdaki kutuya Word, PDF, Excel ya da resim bırakın.</div>';
+      $$("[data-mfa]",dk).forEach(b=>b.onclick=()=>belgeAc(mf,b.dataset.mfa)); $$("[data-mfs]",dk).forEach(b=>b.onclick=async()=>{ if(!await onayla("Bu menü dosyası silinsin mi?","Sil")) return; mf.belgeIds=mf.belgeIds.filter(i=>i!==b.dataset.mfs); delete (mf.belgeMeta||{})[b.dataset.mfs]; kaydet(); this.liste(); }); }
+    const r=(V.menuler||[]).filter(x=>!x.dosyaOnly&&x.tarih.startsWith(MN.ay)).sort((a,b)=>a.tarih.localeCompare(b.tarih));
     $("#mn_liste").innerHTML=r.length?`<div class="tw"><table class="rt"><thead><tr><th>Tarih</th><th>Sabah öğünü</th><th>Öğle öğünü</th><th>İkindi öğünü</th><th></th></tr></thead><tbody>${r.map(m=>`<tr${m.tarih===bugun()?' style="background:#EAF5EF"':""}><td style="white-space:nowrap"><b>${trTarih(m.tarih)}</b><div class="small muted">${gunAdi(m.tarih)}</div></td><td class="small">${esc(m.sabah||"")}</td><td class="small">${esc(m.ogle||"")}</td><td class="small">${esc(m.ikindi||"")}</td><td class="act" style="white-space:nowrap">${belgeDugmeleri(m,"data-mnb")} <button class="btn sm" data-mnd="${m.tarih}">✎ Düzelt</button> <button class="btn sm danger" data-mns="${m.tarih}">Sil</button></td></tr>`).join("")}</tbody></table></div>`:'<div class="empty">Bu ay için menü girilmemiş</div>';
     $$("[data-mnd]").forEach(b=>b.onclick=()=>this.duzelt(b.dataset.mnd));
     $$("[data-mnb]").forEach(b=>b.onclick=()=>{ const x=V.menuler.find(z=>(z.belgeIds||[]).includes(b.dataset.mnb)); if(x) belgeAc(x,b.dataset.mnb); });

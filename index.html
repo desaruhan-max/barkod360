@@ -459,6 +459,7 @@ img[data-g],.dlg img{cursor:zoom-in}
       <button class="btn primary" id="mn_foto">📸 Menü fotoğrafı</button><button class="btn" id="mn_galeri">🖼 Galeriden</button><button class="btn" id="mn_gun">+ Gün ekle</button>
     </div>
     <div class="small muted" style="margin-top:6px"><b>Excel'den:</b> menü tablosunu tarih satırıyla birlikte seçip <b>Ctrl+C</b>, bu sayfada boş bir yere tıklayıp <b>Ctrl+V</b>. Ya da menünün resmini sürükleyip bırakın. Okunan günler aşağıda çıkar; kontrol edip <b>Kaydet</b>'e basın.</div>
+    <div id="mn_zone" style="margin-top:10px;border:2px dashed var(--brand);border-radius:14px;padding:22px 12px;text-align:center;background:#F3F8F5;cursor:pointer"><div style="font-size:30px">📂</div><b>Menü dosyasını buraya sürükleyip bırakın</b><div class="small muted">Resim · PDF · Word · Excel — ya da tıklayıp dosya seçin</div></div>
     <div id="mn_dur" class="small" style="margin:6px 0"></div>
     <div id="mn_onizle"></div>
   </div>
@@ -1086,7 +1087,7 @@ function resimBuyut(src){ if(!src) return; let o=document.getElementById("resimB
 document.addEventListener("click",e=>{ const i=e.target.closest&&e.target.closest("img[data-g], img[data-buyut], .dlg img"); if(!i||i.closest("#resimBuyuk")) return;
   if(!i.src||i.style.visibility==="hidden"||i.style.display==="none"||(i.naturalWidth||0)<2) return; e.preventDefault(); e.stopPropagation(); resimBuyut(i.src); }, true);
 // kayıtlara bağlı belge fotoğrafları (sayım kâğıdı, sevk formu): {belgeIds:[...], fotoAsset:{id:"gh:..."}}
-function belgeDugmeleri(rec, attr){ const ids=(rec&&rec.belgeIds)||[]; return ids.map((id,i)=>`<button type="button" class="btn sm" ${attr}="${esc(id)}">📷 Belge${ids.length>1?" "+(i+1):""}</button>`).join(" "); }
+function belgeDugmeleri(rec, attr){ const ids=(rec&&rec.belgeIds)||[]; return ids.map((id,i)=>{ const mt=(rec.belgeMeta||{})[id]; const ik=mt&&!/^image\//.test(mt.tip||"")?"📄":"📷"; return `<button type="button" class="btn sm" ${attr}="${esc(id)}">${ik} Belge${ids.length>1?" "+(i+1):""}</button>`; }).join(" "); }
 async function belgeAc(rec,id){ const d=await fotoAl(id,rec); if(!d){ toast("Belge açılamadı (internet gerekli olabilir)",1); return; }
   const mt=(rec.belgeMeta||{})[id]; if(!mt||/^image\//.test(mt.tip||"")){ resimBuyut(d); return; }
   const bl=await (await fetch(d)).blob(); const u=URL.createObjectURL(bl);
@@ -3751,11 +3752,22 @@ SAYFA.menu={ ilk:false,
       $("#mn_gun").onclick=()=>this.duzelt(null);
       $("#mn_geri").onclick=()=>{ const d=new Date(MN.ay+"-01T12:00:00"); d.setMonth(d.getMonth()-1); MN.ay=d.toLocaleDateString("sv").slice(0,7); this.liste(); };
       $("#mn_ileri").onclick=()=>{ const d=new Date(MN.ay+"-01T12:00:00"); d.setMonth(d.getMonth()+1); MN.ay=d.toLocaleDateString("sv").slice(0,7); this.liste(); };
+      const zn=$("#mn_zone"); const dosyalar=async fl=>{ for(const f of fl){ const ad=f.name||"menu"; const img=/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic)$/i.test(ad);
+          if(img){ await this.dosya(f.type?f:new File([f],ad,{type:"image/jpeg"})); continue; }
+          try{ const r=await belgeDosyaKaydet(f); const ay=MN.ay; const gl=V.menuler.filter(x=>(x.tarih||"").slice(0,7)===ay);
+            const ekle=m=>{ (m.belgeIds=m.belgeIds||[]).push(r.id); m.belgeMeta=Object.assign({},m.belgeMeta||{}); m.belgeMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; };
+            if(gl.length){ gl.forEach(ekle); kaydet(); this.liste(); toast("“"+ad+"” "+gl.length+" günün menüsüne eklendi"); }
+            else { MN.dosyalar=(MN.dosyalar||[]); MN.dosyalar.push(r); $("#mn_dur").innerHTML="📄 “"+esc(ad)+"” alındı. Günleri “+ Gün ekle” ile girip kaydedince bu dosya menüye bağlanır."; }
+          }catch(er){ toast("Dosya eklenemedi: "+(er&&er.message||er),1); } } };
+      if(zn){ ["dragenter","dragover"].forEach(o=>zn.addEventListener(o,e=>{ e.preventDefault(); e.stopPropagation(); zn.style.background="#DDEFE6"; })); ["dragleave","drop"].forEach(o=>zn.addEventListener(o,e=>{ e.preventDefault(); zn.style.background="#F3F8F5"; }));
+        zn.addEventListener("drop",e=>{ e.stopPropagation(); const fl=[...(e.dataTransfer&&e.dataTransfer.files||[])]; if(fl.length) dosyalar(fl); });
+        zn.onclick=async()=>{ const fl=await dosyaSec(); if(fl&&fl.length) dosyalar(fl); }; }
       const isaret=on=>{ const c=$("#mn_birak"); if(c) c.style.display=on?"flex":"none"; };
       document.addEventListener("dragenter",e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); isaret(true); });
       document.addEventListener("dragover",e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); try{ e.dataTransfer.dropEffect="copy"; }catch(_){} isaret(true); });
       document.addEventListener("dragleave",e=>{ if(AKTIF_SEKME!=="menu") return; if(!e.relatedTarget||e.clientX<=0||e.clientY<=0) isaret(false); });
-      document.addEventListener("drop",async e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); isaret(false); const dt=e.dataTransfer;
+      document.addEventListener("drop",async e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); isaret(false); const dt=e.dataTransfer; if(e.target.closest&&e.target.closest("#mn_zone")) return;
+        { const dg=[...(dt.files||[])]; if(dg.length&&dg.every(x=>!/^image\//.test(x.type)&&!/\.(jpe?g|png|webp)$/i.test(x.name||""))){ dosyalar(dg); return; } }
         let f=[...(dt.files||[])].find(x=>/^image\//.test(x.type)||/\.(jpe?g|png|webp)$/i.test(x.name||"")); if(!f){ const it=[...(dt.items||[])].find(x=>x.kind==="file"); if(it) f=it.getAsFile(); }
         if(f){ this.dosya(f.type?f:new File([f],f.name||"menu.jpg",{type:"image/jpeg"})); return; }
         let u=dt.getData("text/uri-list")||""; if(!u){ const h=dt.getData("text/html")||""; const m=h.match(/<img[^>]+src="([^"]+)"/i); if(m) u=m[1]; }
@@ -3783,7 +3795,9 @@ SAYFA.menu={ ilk:false,
     $$("[data-mx]",k).forEach(e=>e.onclick=()=>{ MN.onizle.splice(+e.dataset.mx,1); this.onizleCiz(); });
     $("#mn_vaz",k).onclick=()=>{ MN.onizle=[]; MN.belge=null; $("#mn_dur").textContent=""; this.onizleCiz(); };
     $("#mn_kay",k).onclick=()=>{ for(const g of MN.onizle){ const id="mn"+g.tarih.replace(/-/g,""); const eski=menuGun(g.tarih); V.menuler=V.menuler.filter(x=>x.tarih!==g.tarih);
-        V.menuler.push({id,tarih:g.tarih,sabah:g.sabah,ogle:g.ogle,ikindi:g.ikindi,belgeIds:MN.belge?[MN.belge]:((eski&&eski.belgeIds)||[]),kayit:new Date().toISOString()}); }
+        { const kyd={id,tarih:g.tarih,sabah:g.sabah,ogle:g.ogle,ikindi:g.ikindi,belgeIds:MN.belge?[MN.belge]:((eski&&eski.belgeIds)||[]),kayit:new Date().toISOString()}; if(eski&&eski.belgeMeta) kyd.belgeMeta=Object.assign({},eski.belgeMeta);
+          for(const r of (MN.dosyalar||[])){ kyd.belgeIds.push(r.id); kyd.belgeMeta=Object.assign({},kyd.belgeMeta||{}); kyd.belgeMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; } V.menuler.push(kyd); } }
+      MN.dosyalar=[];
       const n=MN.onizle.length; MN.ay=MN.onizle[0].tarih.slice(0,7); MN.onizle=[]; MN.belge=null; $("#mn_dur").textContent=""; kaydet(); this.onizleCiz(); this.liste(); toast(n+" günün menüsü kaydedildi"); }; },
   duzelt(t){ const m=t?menuGun(t):null; const b=dlg(m?"Menüyü düzelt · "+trTarih(t):"+ Gün ekle",`<label class="f">Tarih<input id="mdT" inputmode="numeric" value="${m?trTarih(m.tarih):trTarih(bugun())}" style="font-size:16px"></label>
       <label class="f">Sabah öğünü<textarea id="mdS" rows="2">${esc(m?m.sabah:"")}</textarea></label><label class="f">Öğle öğünü<textarea id="mdO" rows="3">${esc(m?m.ogle:"")}</textarea></label><label class="f">İkindi öğünü<textarea id="mdI" rows="2">${esc(m?m.ikindi:"")}</textarea></label>`,

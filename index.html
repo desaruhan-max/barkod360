@@ -3857,19 +3857,23 @@ function stoksuzImhaDlg(sonra){ const tum=Object.values(V.urunler).sort((a,b)=>a
 // imha kaydını düzenle: tarih, miktar, açıklama; stoksuz kayıtta kreş, ürün, parti, STT ve kaynak da
 function imhaKayitDuzenle(id,sonra){ const h=V.hareketler.find(z=>z.id===id); if(!h) return; const sz=!!h.stoksuz; const u0=V.urunler[h.barkod]||{}; const l=sz?null:V.lotlar[h.lotId]; const eski=imhaMik(h);
   const tum=Object.values(V.urunler).sort((a,b)=>a.ad.localeCompare(b.ad,"tr")); const mak=sz?null:yuvarla(kalanOf(h.lotId)+eski);
-  const b=dlg("İmha kaydını düzenle",`${sz?`<p class="small muted">Stoğa girmeden imha kaydı · stok değişmez</p>
-    <label class="f">Kreş<select id="id_k" style="font-size:16px">${KRESLER.map(k=>`<option${k===h.kres?" selected":""}>${esc(k)}</option>`).join("")}</select></label>
-    <label class="f">Ürün<input id="id_u" list="id_dl" value="${esc(u0.ad?u0.ad+(u0.marka?" · "+u0.marka:"")+" — "+u0.barkod:"")}" style="font-size:16px"></label><datalist id="id_dl">${tum.map(u=>`<option value="${esc(u.ad+(u.marka?" · "+u.marka:"")+" — "+u.barkod)}">`).join("")}</datalist>`:`<p class="small"><b>${esc(urunAd(h.barkod))}</b> · ${esc(KISA[h.kres]||h.kres)}${l&&l.lot&&l.lot!=="SAYIM"?" · Parti "+esc(l.lot):""}</p>`}
+  const sebepOp=(h.sebep&&!IMHA_SEBEPLER.includes(h.sebep)?[h.sebep,...IMHA_SEBEPLER]:IMHA_SEBEPLER).map(x=>`<option${x===(h.sebep||"")?" selected":""}>${esc(x)}</option>`).join("");
+  const b=dlg("İmha kaydını düzenle",`<p class="small muted">${sz?"Stoğa girmeden imha kaydı · stok değişmez":"Stoktan imha kaydı · miktar değişirse stok güncellenir"}</p>
+    <label class="f">Kreş${sz?`<select id="id_k" style="font-size:16px">${KRESLER.map(k=>`<option${k===h.kres?" selected":""}>${esc(k)}</option>`).join("")}</select>`:`<input value="${esc(h.kres)}" disabled style="font-size:16px">`}</label>
+    ${sz?`<label class="f">Ürün<input id="id_u" list="id_dl" value="${esc(u0.ad?u0.ad+(u0.marka?" · "+u0.marka:"")+" — "+u0.barkod:"")}" style="font-size:16px"></label><datalist id="id_dl">${tum.map(u=>`<option value="${esc(u.ad+(u.marka?" · "+u.marka:"")+" — "+u.barkod)}">`).join("")}</datalist>`:`<label class="f">Ürün<input value="${esc((u0.ad||h.barkod)+(u0.marka?" · "+u0.marka:"")+" — "+h.barkod)}" disabled style="font-size:16px"></label>`}
     <div class="inrow" style="gap:8px"><label class="f" style="flex:1">İmha tarihi<input id="id_t" inputmode="numeric" value="${trTarih(imhaGunu(h))}" style="font-size:16px"></label><label class="f" style="flex:1">Miktar${sz?"":" (en çok "+nf(mak,3)+")"}<input id="id_m" type="number" step="any" min="0" value="${eski}" style="font-size:18px"></label></div>
     ${sz?`<div class="inrow" style="gap:8px"><label class="f" style="flex:1">Parti no<input id="id_p" value="${esc(h.parti||"")}"></label><label class="f" style="flex:1">STT / TETT<input id="id_s" inputmode="numeric" value="${h.skt?trTarih(h.skt):""}"></label></div>
-    <label class="f">Kaynak<input id="id_kay" value="${esc(h.kaynak||"")}"></label>`:""}
-    <label class="f">Açıklama<input id="id_a" value="${esc(h.ack||"")}" style="font-size:16px"></label><p id="id_h" class="neg" style="display:none;font-weight:700"></p>`,
+    <label class="f">Kaynak<input id="id_kay" value="${esc(h.kaynak||"")}"></label>`:`<div class="inrow" style="gap:8px"><label class="f" style="flex:1">Parti no<input value="${esc(l&&l.lot&&l.lot!=="SAYIM"?l.lot:"")}" disabled></label><label class="f" style="flex:1">STT / TETT<input value="${l&&l.skt?trTarih(l.skt):""}" disabled></label></div>`}
+    <label class="f">İmha sebebi<select id="id_sb" style="font-size:16px"><option value="">— seçin —</option>${sebepOp}</select></label>
+    <label class="f">Nerede / ne zaman tespit edildi<input id="id_t2" value="${esc(h.tespit||"")}" placeholder="Örn. Ferdi Zeyrek 23.10.2026 sayımında tespit edilmiştir" style="font-size:16px"></label>
+    <label class="f">Açıklama<input id="id_a" value="${esc(h.ack||"")}" style="font-size:16px"></label>
+    <label class="f">Tutanak no<input id="id_n" value="${esc(h.tutanakNo||"")}" style="font-size:16px"></label><p id="id_h" class="neg" style="display:none;font-weight:700"></p>`,
     [{t:"Vazgeç"},{t:"Kaydet",c:"primary",f:()=>{ const e=$("#id_h",b); const hata=m=>{ e.textContent="⚠ "+m; e.style.display="block"; return false; };
       const t=tarihCoz($("#id_t",b).value); if(!t) return hata("Tarihi gg.aa.yyyy yazın"); const m=+$("#id_m",b).value; if(!(m>0)) return hata("Miktarı yazın");
       if(sz){ const u=urunSecimdenBul($("#id_u",b).value); if(!u) return hata("Listeden bir ürün seçin"); const sk=$("#id_s",b).value.trim()?tarihCoz($("#id_s",b).value):""; if(sk===null) return hata("STT tarihini gg.aa.yyyy yazın");
         Object.assign(h,{kres:$("#id_k",b).value,barkod:u.barkod,imhaMiktar:m,parti:$("#id_p",b).value.trim()||undefined,skt:sk||undefined,kaynak:$("#id_kay",b).value.trim()||undefined}); }
       else { if(m>mak+1e-9) return hata("Miktar en çok "+nf(mak,3)+" olabilir"); h.miktar=-m; }
-      h.tarih=t; h.ack=$("#id_a",b).value.trim(); kaydet(); toast("İmha kaydı güncellendi"); sonra&&sonra(); }}]);
+      h.tarih=t; h.ack=$("#id_a",b).value.trim(); h.sebep=$("#id_sb",b).value||undefined; h.tespit=$("#id_t2",b).value.trim()||undefined; h.tutanakNo=$("#id_n",b).value.trim()||undefined; kaydet(); toast("İmha kaydı güncellendi"); sonra&&sonra(); }}]);
   tarihMaske($("#id_t",b)); if(sz) tarihMaske($("#id_s",b)); }
 // imha kaydedilince İmha Kayıtları sayfasına geç ve sebep/tutanak penceresini aç
 function imhaSayfasinaGit(ids){ if(!ids||!ids.length) return; setTimeout(()=>{ sekme("imha"); setTimeout(()=>imhaDuzenle(ids,()=>SAYFA.imha.goster()),150); },200); }

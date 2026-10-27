@@ -452,7 +452,7 @@ img[data-g],.dlg img{cursor:zoom-in}
 </section>
 
 <section class="tab" id="tab-menu">
-  <div id="mn_birak" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(27,107,82,.18);align-items:center;justify-content:center;pointer-events:none"><div style="background:#fff;border:3px dashed var(--brand);border-radius:16px;padding:30px 40px;font-size:20px;font-weight:700;color:var(--brand)">📅 Menü resmini buraya bırakın</div></div>
+  <div id="mn_birak" style="display:none;position:fixed;inset:0;z-index:60;background:rgba(27,107,82,.18);align-items:center;justify-content:center;pointer-events:none"><div style="background:#fff;border:3px dashed var(--brand);border-radius:16px;padding:30px 40px;font-size:20px;font-weight:700;color:var(--brand)">📅 Menü dosyasını buraya bırakın<div style="font-size:13px;font-weight:400;color:#555">resim · PDF · Word · Excel</div></div></div>
   <div class="sec-h"><h2>Menü (haftalık / aylık)</h2><span class="small muted">4 kreş için ortak</span></div>
   <div class="card">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
@@ -3752,7 +3752,7 @@ SAYFA.menu={ ilk:false,
       $("#mn_gun").onclick=()=>this.duzelt(null);
       $("#mn_geri").onclick=()=>{ const d=new Date(MN.ay+"-01T12:00:00"); d.setMonth(d.getMonth()-1); MN.ay=d.toLocaleDateString("sv").slice(0,7); this.liste(); };
       $("#mn_ileri").onclick=()=>{ const d=new Date(MN.ay+"-01T12:00:00"); d.setMonth(d.getMonth()+1); MN.ay=d.toLocaleDateString("sv").slice(0,7); this.liste(); };
-      const zn=$("#mn_zone"); const dosyalar=async fl=>{ for(const f of fl){ const ad=f.name||"menu"; const img=/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic)$/i.test(ad);
+      const zn=$("#mn_zone"); const dosyalar=async fl=>{ toast("Dosya alınıyor: "+fl.map(x=>x.name).join(", ")); for(const f of fl){ const ad=f.name||"menu"; const img=/^image\//.test(f.type)||/\.(jpe?g|png|webp|heic)$/i.test(ad);
           if(img){ await this.dosya(f.type?f:new File([f],ad,{type:"image/jpeg"})); continue; }
           try{ const r=await belgeDosyaKaydet(f); const ay=MN.ay; const gl=V.menuler.filter(x=>(x.tarih||"").slice(0,7)===ay);
             const ekle=m=>{ (m.belgeIds=m.belgeIds||[]).push(r.id); m.belgeMeta=Object.assign({},m.belgeMeta||{}); m.belgeMeta[r.id]={ad:r.ad,tip:r.tip,uz:r.uz}; };
@@ -3767,6 +3767,7 @@ SAYFA.menu={ ilk:false,
       document.addEventListener("dragover",e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); try{ e.dataTransfer.dropEffect="copy"; }catch(_){} isaret(true); });
       document.addEventListener("dragleave",e=>{ if(AKTIF_SEKME!=="menu") return; if(!e.relatedTarget||e.clientX<=0||e.clientY<=0) isaret(false); });
       document.addEventListener("drop",async e=>{ if(AKTIF_SEKME!=="menu") return; e.preventDefault(); isaret(false); const dt=e.dataTransfer; if(e.target.closest&&e.target.closest("#mn_zone")) return;
+        if(!(dt.files&&dt.files.length)&&!dt.getData("text/uri-list")&&!dt.getData("text/html")){ toast("Dosya alınamadı. Dosyayı Masaüstü ya da Dosya Gezgini'nden sürükleyin; tarayıcıdan inen dosyayı önce klasörde açıp oradan sürükleyin.",1,9000); return; }
         { const dg=[...(dt.files||[])]; if(dg.length&&dg.every(x=>!/^image\//.test(x.type)&&!/\.(jpe?g|png|webp)$/i.test(x.name||""))){ dosyalar(dg); return; } }
         let f=[...(dt.files||[])].find(x=>/^image\//.test(x.type)||/\.(jpe?g|png|webp)$/i.test(x.name||"")); if(!f){ const it=[...(dt.items||[])].find(x=>x.kind==="file"); if(it) f=it.getAsFile(); }
         if(f){ this.dosya(f.type?f:new File([f],f.name||"menu.jpg",{type:"image/jpeg"})); return; }

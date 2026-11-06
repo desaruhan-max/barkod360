@@ -3692,6 +3692,9 @@ function kuCevir(u,miktar,birim){ if(!u||!(miktar>0)) return {m:null}; const b=S
   if(!b||b==="adet"||b===u.birim||b==="paket") return {m:miktar};
   const a=ambalajMiktar(u); const v=a&&(a.b==="kg"?kgDeg:ltDeg); if(a&&v!=null) return {m:yuvarla(v/a.v),not:"≈ "+nf(v/a.v,2)+" "+u.birim};
   return {m:null,uyar:"Birim çevrilemedi"}; }
+function kuYogurtMu(x){ const u=V.urunler[x.barkod]; return /YOGURT/.test(katla((u&&u.ad||"")+" "+(x.ad||""))) && !/CACIK|AYRAN/.test(katla(x.ad||"")); }
+function kuAyranGunu(t){ const m=t?menuGun(t):null; return !!m && /AYRAN|CACIK/.test(katla([m.sabah,m.ogle,m.ikindi].join(" "))); }
+function kuYogurtKutu(x,ayran){ return ayran?3:1.125; }
 const OGUNLER=["Sabah öğünü","Öğle öğünü","İkindi öğünü"];
 function ogunAd(o){ const k=katla(o||"").trim(); if(!k) return ""; if(/KAHVALTI|SABAH/.test(k)) return "Sabah öğünü"; if(/YEMEK|OGLE|OGLEN/.test(k)) return "Öğle öğünü"; if(/IKINDI|MEYVE/.test(k)) return "İkindi öğünü"; return o; }
 function ogunSecHtml(v,attr){ v=ogunAd(v); const l=OGUNLER.includes(v)||!v?OGUNLER:OGUNLER.concat([v]); return `<select ${attr}>${l.map(o=>`<option${o===v?" selected":""}>${esc(o)}</option>`).join("")}</select>`; }
@@ -3743,8 +3746,12 @@ SAYFA.kullanim={ ilk:false,
       this.ciz(); }catch(e){ d.textContent="Okunamadı ("+(e&&e.message||e)+"). Satırları elle ekleyebilirsiniz."; } },
   ciz(){ const t=this.tarih(); const kres=aktifKres(); const sn=kuSinir(kres); const kayitOnly=t&&sn&&t<=sn; const mnu=t?menuSatir(menuGun(t),true):"";
     const ust=mnu+(t?(kayitOnly?`<div class="banner">⚠ ${trTarih(t)} tarihi ${esc(KISA[kres]||kres)} sayımından (${trTarih(sn)}) önce/aynı gün: <b>stoktan düşülmeyecek, yalnız kayıt tutulacak.</b></div>`:`<div class="small muted">${esc(kres)} · ${trTarih(t)} · onaylayınca stoktan düşülür${sn?" (son sayım "+trTarih(sn)+")":""}.</div>`):'<div class="small neg">Tarihi yazın.</div>');
-    if(!KU.satirlar.length){ $("#ku_tablo").innerHTML=ust+'<div class="empty" style="margin-top:8px">Reçete kâğıdının fotoğrafını çekin ya da “+ Satır ekle” ile girin.</div>'; return; }
-    $("#ku_tablo").innerHTML=ust+`<div class="tw"><table class="rt"><thead><tr><th>Öğün</th><th>Kâğıtta</th><th>Stoktaki ürün</th><th class="r">Düşülecek</th><th>STT</th><th class="r">Stok</th><th></th></tr></thead><tbody>${KU.satirlar.map((x,i)=>{ const u=V.urunler[x.barkod]; const ls=u?fefoSirala(lotlarOf(u.barkod,kres).filter(l=>!l.red&&kalanOf(l.id)>0)):[]; const st=u?stokOf(u.barkod,kres):0; const az=u&&x.m>0&&st+1e-9<x.m;
+    const ayran=kuAyranGunu(t); const yog=KU.satirlar.map((x,i)=>[x,i]).filter(o=>o[0].barkod&&kuYogurtMu(o[0]));
+    yog.forEach(o=>{ const x=o[0]; if(x.yg==null){ x.yg=1; x.yazilan=x.miktar!=null?x.miktar:x.m; x.m=kuYogurtKutu(x,ayran); } });
+    const yogHtml=yog.length?`<div class="banner" style="background:#FFF3CD;border:2px solid #E0A800;color:#5c4400;font-size:14px;margin:8px 0"><b>🥛 YOĞURT HATIRLATMASI</b><br>Kâğıtta <b>${yog.map(o=>nf(o[0].yazilan,3)).join(" + ")} adet</b> yazıyor. Gerçekte <b>${ayran?"ayran/cacık günü: 3 kutu açılıyor":"normal gün: 1 tam kutu + 1 kase = 1,125 kutu"}</b> kullanılıyor (ikinci kutu ertesi gün bitiyor). Stoktan düşülecek: <b>${yog.map(o=>nf(o[0].m,3)).join(" + ")} kutu</b>.<br><span class="small">Bugün gerçekten farklı kullanıldıysa seçin:</span> ${yog.map(o=>`<span style="white-space:nowrap"><button class="btn sm" data-yg="${o[1]}|1.125">1,125 (normal)</button> <button class="btn sm" data-yg="${o[1]}|3">3 (ayran/cacık)</button> <button class="btn sm" data-yg="${o[1]}|${o[0].yazilan}">Kâğıttaki gibi (${nf(o[0].yazilan,3)})</button></span>`).join(" ")}</div>`:"";
+    const ust2=ust+yogHtml;
+    if(!KU.satirlar.length){ $("#ku_tablo").innerHTML=ust2+'<div class="empty" style="margin-top:8px">Reçete kâğıdının fotoğrafını çekin ya da “+ Satır ekle” ile girin.</div>'; return; }
+    $("#ku_tablo").innerHTML=ust2+`<div class="tw"><table class="rt"><thead><tr><th>Öğün</th><th>Kâğıtta</th><th>Stoktaki ürün</th><th class="r">Düşülecek</th><th>STT</th><th class="r">Stok</th><th></th></tr></thead><tbody>${KU.satirlar.map((x,i)=>{ const u=V.urunler[x.barkod]; const ls=u?fefoSirala(lotlarOf(u.barkod,kres).filter(l=>!l.red&&kalanOf(l.id)>0)):[]; const st=u?stokOf(u.barkod,kres):0; const az=u&&x.m>0&&st+1e-9<x.m;
       return `<tr style="${!u||x.m==null?"background:#FFF8E6":""}"><td>${ogunSecHtml(x.ogun,`data-ko="${i}" style="width:120px"`)}</td>
         <td><input data-ka="${i}" value="${esc(x.ad)}" style="width:140px"><div class="small muted">${x.miktar!=null?nf(x.miktar,3)+" "+esc(x.birim||""):""}</div></td>
         <td><div data-ku="${i}" style="min-width:200px"></div>${u?`<div class="small"><b>${esc(u.ad)}</b>${u.marka?" · "+esc(u.marka):""}</div>`:'<div class="small neg" style="font-weight:700">❓ Ürünü seçin</div>'}</td>
@@ -3754,6 +3761,7 @@ SAYFA.kullanim={ ilk:false,
         <td><button class="btn sm danger" data-kx="${i}">✕</button></td></tr>`; }).join("")}</tbody></table></div>`;
     KU.satirlar.forEach((x,i)=>urunAraKutu($(`[data-ku="${i}"]`),u=>{ x.barkod=u.barkod; const cv=kuCevir(u,x.miktar,x.birim); x.m=cv.m!=null?cv.m:x.m; x.uyar=cv.m!=null?"":(cv.uyar||""); x.lotId=""; this.ciz(); },"🔍 değiştir / seç"));
     $$("#ku_tablo .uak-in").forEach(e=>Object.assign(e.style,{fontSize:"13px",padding:"4px 8px",borderWidth:"1px"})); $$("#ku_tablo [data-ku] > div").forEach(e=>e.style.marginBottom="3px");
+    $$("[data-yg]").forEach(e=>e.onclick=()=>{ const [i,v]=e.dataset.yg.split("|"); KU.satirlar[+i].m=+v; KU.satirlar[+i].ygSecim=1; this.ciz(); });
     $$("[data-ko]").forEach(e=>e.onchange=()=>KU.satirlar[+e.dataset.ko].ogun=e.value);
     $$("[data-ka]").forEach(e=>e.oninput=()=>KU.satirlar[+e.dataset.ka].ad=e.value);
     $$("[data-km]").forEach(e=>e.oninput=()=>{ const v=String(e.value).replace(/\s/g,""); const n=+(v.includes(",")?v.replace(/\./g,"").replace(",","."):v); KU.satirlar[+e.dataset.km].m=v===""?null:n; });
@@ -3763,9 +3771,12 @@ SAYFA.kullanim={ ilk:false,
     const sat=KU.satirlar.filter(x=>x.barkod&&x.m>0); const eks=KU.satirlar.filter(x=>!(x.barkod&&x.m>0));
     if(!sat.length){ toast("Kaydedilecek satır yok",1); return; }
     if(eks.length && !await onayla(eks.length+" satırda ürün ya da miktar eksik; bu satırlar kaydedilmeyecek. Devam edilsin mi?","Devam")) return;
+    const yg=sat.filter(x=>x.yg!=null); if(yg.length){ const ay=kuAyranGunu(t); const ozet=yg.map(x=>nf(x.yazilan,3)+" adet yazıyor → "+nf(x.m,3)+" kutu düşülecek").join("; ");
+      if(!await onayla("🥛 <b>Yoğurt hatırlatması</b><br>"+ozet+(ay?" (ayran/cacık günü)":" (normal gün: 1 tam kutu + 1 kase)")+".<br>Bugün gerçekten farklı kullanıldıysa Vazgeç'e basıp miktarı değiştirin.","Doğru, kaydet",false)) return; }
     const ku={id:uid("k"),kres,tarih:t,stok,kayit:new Date().toISOString(),satirlar:[],belgeIds:KU.belge?[KU.belge]:[]};
     const zaman=t===bugun()?new Date().toISOString():t+"T10:00:00.000Z"; let yetmeyen=[];
     for(const x of sat){ const u=V.urunler[x.barkod]; const r={ogun:ogunAd(x.ogun),ad:x.ad,girilen:(x.miktar!=null?nf(x.miktar,3)+" "+(x.birim||""):""),barkod:x.barkod,miktar:x.m,birim:u.birim,dusen:0};
+      if(x.yg!=null){ const ay=kuAyranGunu(t); r.girilen=Math.abs(x.m-x.yazilan)<1e-9?nf(x.yazilan,3)+" adet":(ay?"AYRAN/CACIK GÜNÜ: ":"")+"Kâğıtta "+nf(x.yazilan,3)+" adet yazıyor → gerçekte "+nf(x.m,3)+" kutu (stoktan "+nf(x.m,3)+" düşüldü)"; }
       if(stok){ let ls=fefoSirala(lotlarOf(u.barkod,kres).filter(l=>!l.red&&kalanOf(l.id)>0)); if(x.lotId){ const i=ls.findIndex(l=>l.id===x.lotId); if(i>0) ls.unshift(ls.splice(i,1)[0]); }
         let kal=x.m; for(const l of ls){ if(kal<=1e-9) break; const al=Math.min(kal,kalanOf(l.id)); kal=yuvarla(kal-al); r.dusen=yuvarla(r.dusen+al);
           hareketEkle({t:zaman,tur:"CIKIS",kres,barkod:u.barkod,lotId:l.id,miktar:-al,fiyat:l.fiyat,ack:"Günlük kullanım "+trTarih(t)+" · "+ogunAd(x.ogun)+(x.ad?" · "+x.ad:""),kullanimId:ku.id}); }
